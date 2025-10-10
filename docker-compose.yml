@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  kuzuk-test:
+    build: .
+    container_name: kuzuk-test
+    volumes:
+      # Mount source code for development
+      - ./kuzuk:/app/kuzuk
+      - ./tests:/app/tests
+      - ./examples:/app/examples
+      # Mount test results
+      - ./test-results:/app/test-results
+      - ./htmlcov:/app/htmlcov
+    environment:
+      - PYTHONPATH=/app
+      - KUZU_TEST_DB_DIR=/tmp/kuzu_test_dbs
+      - KUZU_REPLICA_DIR=/tmp/kuzu_replicas
+    working_dir: /app
+    command: python tests/run_tests.py --all --coverage
+    
+  # Unit tests only
+  unit-tests:
+    build: .
+    container_name: kuzuk-unit-tests
+    volumes:
+      - ./kuzuk:/app/kuzuk
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+    environment:
+      - PYTHONPATH=/app
+    working_dir: /app
+    command: python tests/run_tests.py --unit --coverage
+    
+  # Integration tests only
+  integration-tests:
+    build: .
+    container_name: kuzuk-integration-tests
+    volumes:
+      - ./kuzuk:/app/kuzuk
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+    environment:
+      - PYTHONPATH=/app
+      - KUZU_TEST_DB_DIR=/tmp/kuzu_test_dbs
+      - KUZU_REPLICA_DIR=/tmp/kuzu_replicas
+    working_dir: /app
+    command: python tests/run_tests.py --integration --coverage
+    
+  # Performance tests
+  performance-tests:
+    build: .
+    container_name: kuzuk-performance-tests
+    volumes:
+      - ./kuzuk:/app/kuzuk
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+    environment:
+      - PYTHONPATH=/app
+      - KUZU_TEST_DB_DIR=/tmp/kuzu_test_dbs
+      - KUZU_REPLICA_DIR=/tmp/kuzu_replicas
+    working_dir: /app
+    command: python tests/run_tests.py --performance
+    
+  # Interactive development environment
+  dev:
+    build: .
+    container_name: kuzuk-dev
+    volumes:
+      - ./:/app
+    environment:
+      - PYTHONPATH=/app
+      - KUZU_TEST_DB_DIR=/tmp/kuzu_test_dbs
+      - KUZU_REPLICA_DIR=/tmp/kuzu_replicas
+    working_dir: /app
+    command: bash
+    stdin_open: true
+    tty: true
+    
+  # Docker setup verification
+  verify-setup:
+    build: .
+    container_name: kuzuk-verify-setup
+    volumes:
+      - ./kuzuk:/app/kuzuk
+      - ./test-docker-setup.py:/app/test-docker-setup.py
+    environment:
+      - PYTHONPATH=/app
+    working_dir: /app
+    command: python test-docker-setup.py
+    
+  # Phase 1 integration test
+  phase1-test:
+    build: .
+    container_name: kuzuk-phase1-test
+    volumes:
+      - ./kuzuk:/app/kuzuk
+      - ./test_phase1_complete.py:/app/test_phase1_complete.py
+      - ./test-results:/app/test-results
+    environment:
+      - PYTHONPATH=/app
+      - KUZU_TEST_DB_DIR=/tmp/kuzu_test_dbs
+      - KUZU_REPLICA_DIR=/tmp/kuzu_replicas
+    working_dir: /app
+    command: python test_phase1_complete.py

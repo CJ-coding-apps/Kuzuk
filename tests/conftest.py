@@ -1,0 +1,106 @@
+"""
+Pytest configuration and fixtures for Kuzuk tests.
+"""
+
+import pytest
+import asyncio
+import tempfile
+import shutil
+from pathlib import Path
+
+# Configure pytest markers
+def pytest_configure(config):
+    """Configure pytest markers."""
+    config.addinivalue_line("markers", "unit: Unit tests")
+    config.addinivalue_line("markers", "integration: Integration tests requiring KuzuDB")
+    config.addinivalue_line("markers", "performance: Performance benchmarks")
+    config.addinivalue_line("markers", "slow: Slow tests")
+
+
+# Configure asyncio event loop for tests
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for the test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def temp_test_dir():
+    """Create temporary directory for all tests in session."""
+    temp_dir = tempfile.mkdtemp(prefix="kuzuk_tests_")
+    yield temp_dir
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def temp_db_path(temp_test_dir):
+    """Create temporary database path for individual tests."""
+    db_path = Path(temp_test_dir) / f"test_{pytest.current_test_id}.kuzu"
+    yield str(db_path)
+    # Cleanup handled by session fixture
+
+
+@pytest.fixture
+def temp_replica_dir(temp_test_dir):
+    """Create temporary replica directory for individual tests."""
+    replica_dir = Path(temp_test_dir) / f"replicas_{pytest.current_test_id}"
+    replica_dir.mkdir(exist_ok=True)
+    yield str(replica_dir)
+    # Cleanup handled by session fixture
+
+
+# Store current test ID for unique file naming
+@pytest.fixture(autouse=True)
+def setup_test_id(request):
+    """Set up unique test ID for file naming."""
+    pytest.current_test_id = request.node.name.replace("::", "_").replace("[", "_").replace("]", "_")
+
+
+# Skip integration tests if KuzuDB is not available
+def pytest_collection_modifyitems(config, items):
+    """Modify test collection to handle missing dependencies."""
+    try:
+        import kuzu
+        kuzu_available = True
+    except ImportError:
+        kuzu_available = False
+    
+    skip_integration = pytest.mark.skip(reason="KuzuDB not available")
+    
+    for item in items:
+        if "integration" in item.keywords and not kuzu_available:
+            item.add_marker(skip_integration)
+
+
+# Pytest command line options
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--run-performance",
+        action="store_true",
+        default=False,
+        help="Run performance tests"
+    )
+    parser.addoption(
+        "--run-slow",
+        action="store_true", 
+        default=False,
+        help="Run slow tests"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip tests based on command line options."""
+    if not config.getoption("--run-performance"):
+        skip_performance = pytest.mark.skip(reason="need --run-performance option to run")
+        for item in items:
+            if "performance" in item.keywords:
+                item.add_marker(skip_performance)
+    
+    if not config.getoption("--run-slow"):
+        skip_slow = pytest.mark.skip(reason="need --run-slow option to run")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)

@@ -1,0 +1,198 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: kuzuk
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.25.0
+        args:
+          - '--config.file=/etc/alertmanager/alertmanager.yml'
+          - '--storage.path=/alertmanager'
+          - '--data.retention=168h'  # 7 days
+          - '--web.external-url=http://alertmanager.kuzuk.local'
+          - '--web.route-prefix=/'
+          - '--cluster.listen-address=0.0.0.0:9094'
+          - '--log.level=info'
+        ports:
+        - containerPort: 9093
+          name: web
+        - containerPort: 9094
+          name: cluster
+        env:
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kuzuk-secrets
+              key: smtp-password
+              optional: true
+        - name: SLACK_API_URL
+          valueFrom:
+            secretKeyRef:
+              name: kuzuk-secrets
+              key: slack-api-url
+              optional: true
+        - name: PAGERDUTY_ROUTING_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kuzuk-secrets
+              key: pagerduty-routing-key
+              optional: true
+        - name: GRAFANA_URL
+          value: "http://grafana.kuzuk.local"
+        - name: ALERTMANAGER_URL
+          value: "http://alertmanager.kuzuk.local"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: storage
+          mountPath: /alertmanager
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: web
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: web
+          initialDelaySeconds: 5
+          timeoutSeconds: 30
+      
+      # Config reloader sidecar
+      - name: config-reloader
+        image: jimmidyson/configmap-reload:v0.8.0
+        args:
+          - '--volume-dir=/etc/alertmanager'
+          - '--webhook-url=http://localhost:9093/-/reload'
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "10m"
+          limits:
+            memory: "32Mi"
+            cpu: "50m"
+      
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: storage
+        persistentVolumeClaim:
+          claimName: alertmanager-pvc
+      
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-service
+  namespace: kuzuk
+  labels:
+    app: alertmanager
+spec:
+  selector:
+    app: alertmanager
+  ports:
+  - port: 9093
+    targetPort: web
+    name: web
+  - port: 9094
+    targetPort: cluster
+    name: cluster
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: kuzuk
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-pvc
+  namespace: kuzuk
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alertmanager-ingress
+  namespace: kuzuk
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: kuzuk-secrets
+    nginx.ingress.kubernetes.io/auth-realm: 'Alertmanager Authentication Required'
+spec:
+  rules:
+  - host: alertmanager.kuzuk.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: alertmanager-service
+            port:
+              number: 9093
+
+---
+# Service Monitor for Prometheus to scrape Alertmanager
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alertmanager
+  namespace: kuzuk
+  labels:
+    app: alertmanager
+spec:
+  selector:
+    matchLabels:
+      app: alertmanager
+  endpoints:
+  - port: web
+    interval: 30s
+    path: /metrics

@@ -1,0 +1,65 @@
+apiVersion: kuzu.io/v1
+kind: Kuzuk
+metadata:
+  name: my-kuzu-cluster
+  namespace: default
+spec:
+  cluster:
+    name: "my-kuzu-cluster"
+    replicas: 3
+    version: "latest"
+  
+  database:
+    storage:
+      size: "50Gi"
+      storageClass: "fast-ssd"
+    replication:
+      walRetention: "24h"
+      syncMode: "async"
+      lagThreshold: "5s"
+  
+  resources:
+    master:
+      cpu: "2000m"
+      memory: "4Gi"
+      limits:
+        cpu: "4000m"
+        memory: "8Gi"
+    replica:
+      cpu: "1000m"
+      memory: "2Gi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+  
+  scaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCpuUtilization: 70
+    targetMemoryUtilization: 80
+  
+  monitoring:
+    enabled: true
+    prometheus:
+      enabled: true
+      retention: "30d"
+      storage: "20Gi"
+    grafana:
+      enabled: true
+      adminPassword: "secure-password-123"
+    alerting:
+      enabled: true
+      channels:
+      - type: "slack"
+        config:
+          webhook_url: "https://hooks.slack.com/your/webhook/url"
+          channel: "#alerts"
+  
+  security:
+    rbac:
+      enabled: true
+    networkPolicy:
+      enabled: true
+    podSecurityPolicy:
+      enabled: true

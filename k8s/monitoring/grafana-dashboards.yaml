@@ -1,0 +1,330 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: kuzuk
+data:
+  kuzuk-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kuzuk - Cluster Overview",
+        "tags": ["kuzu", "cluster", "overview"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Cluster Health Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kuzu_cluster_health_status",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "options": {
+              "colorMode": "background",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "textMode": "auto"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {"options": {"0": {"text": "UNHEALTHY", "color": "red"}}, "type": "value"},
+                  {"options": {"1": {"text": "HEALTHY", "color": "green"}}, "type": "value"}
+                ],
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Active Replicas",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kuzu_replica_status == 1)",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Query Throughput (QPS)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_queries_total[5m])",
+                "refId": "A",
+                "legendFormat": "{{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+            "yAxes": [
+              {"label": "Queries/sec", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Query Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(kuzu_query_duration_seconds_bucket[5m]))",
+                "refId": "A",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(kuzu_query_duration_seconds_bucket[5m]))",
+                "refId": "B",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+            "yAxes": [
+              {"label": "Seconds", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_errors_total[5m])",
+                "refId": "A",
+                "legendFormat": "{{error_type}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+            "yAxes": [
+              {"label": "Errors/sec", "min": 0},
+              {"show": false}
+            ]
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "5s"
+      }
+    }
+  kuzuk-replication.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kuzuk - Replication Monitoring",
+        "tags": ["kuzu", "replication", "wal"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "WAL Streaming Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_wal_records_streamed_total[5m])",
+                "refId": "A",
+                "legendFormat": "{{replica_id}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "yAxes": [
+              {"label": "Records/sec", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Replication Lag",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kuzu_replication_lag_seconds",
+                "refId": "A",
+                "legendFormat": "{{replica_id}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "yAxes": [
+              {"label": "Seconds", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Replica Sync Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kuzu_replica_sync_status",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+            "options": {
+              "colorMode": "background"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {"options": {"0": {"text": "OUT_OF_SYNC", "color": "red"}}, "type": "value"},
+                  {"options": {"1": {"text": "IN_SYNC", "color": "green"}}, "type": "value"}
+                ]
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "WAL File Size Growth",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kuzu_wal_file_size_bytes",
+                "refId": "A",
+                "legendFormat": "WAL Size"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+            "yAxes": [
+              {"label": "Bytes", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Replication Errors",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_replication_errors_total[5m])",
+                "refId": "A",
+                "legendFormat": "{{error_type}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+            "yAxes": [
+              {"label": "Errors/sec", "min": 0},
+              {"show": false}
+            ]
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "5s"
+      }
+    }
+  kuzuk-performance.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kuzuk - Performance Metrics",
+        "tags": ["kuzu", "performance", "resources"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+                "refId": "A",
+                "legendFormat": "{{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "yAxes": [
+              {"label": "Percent", "min": 0, "max": 100},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "process_resident_memory_bytes / 1024 / 1024",
+                "refId": "A",
+                "legendFormat": "{{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "yAxes": [
+              {"label": "MB", "min": 0},
+              {"show": false}
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Database Connection Pool",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kuzu_connection_pool_active",
+                "refId": "A",
+                "legendFormat": "Active Connections"
+              },
+              {
+                "expr": "kuzu_connection_pool_idle",
+                "refId": "B",
+                "legendFormat": "Idle Connections"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Disk I/O",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_disk_reads_total[5m])",
+                "refId": "A",
+                "legendFormat": "Reads/sec"
+              },
+              {
+                "expr": "rate(kuzu_disk_writes_total[5m])",
+                "refId": "B",
+                "legendFormat": "Writes/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Function Shipping Stats",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(kuzu_function_shipping_requests_total[5m])",
+                "refId": "A",
+                "legendFormat": "Requests/sec"
+              },
+              {
+                "expr": "histogram_quantile(0.95, rate(kuzu_function_shipping_duration_seconds_bucket[5m]))",
+                "refId": "B",
+                "legendFormat": "95th percentile latency"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "5s"
+      }
+    }

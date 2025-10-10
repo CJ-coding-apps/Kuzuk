@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kuzuk
+  labels:
+    app: kuzuk
+    environment: production

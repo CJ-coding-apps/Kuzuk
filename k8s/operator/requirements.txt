@@ -1,0 +1,13 @@
+# Kubernetes Operator Dependencies
+kopf>=1.36.0
+kubernetes>=27.2.0
+pyyaml>=6.0
+jinja2>=3.1.0
+
+# Additional utilities
+aiohttp>=3.8.0
+asyncio-throttle>=1.0.0
+prometheus-client>=0.16.0
+
+# Logging and monitoring
+structlog>=22.0.0

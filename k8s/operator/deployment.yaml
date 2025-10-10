@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kuzuk-operator
+  namespace: kuzuk
+  labels:
+    app: kuzuk-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuzuk-operator
+  labels:
+    app: kuzuk-operator
+rules:
+# Custom resources
+- apiGroups: ["kuzu.io"]
+  resources: ["kuzuks", "kuzubackups"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["kuzu.io"]
+  resources: ["kuzuks/status", "kuzubackups/status"]
+  verbs: ["get", "update", "patch"]
+
+# Core Kubernetes resources
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "configmaps", "secrets", "namespaces"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Apps resources
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Autoscaling resources
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Networking resources
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies", "ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Monitoring resources
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["servicemonitors", "prometheusrules"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Events
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+# Coordination for leader election
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuzuk-operator
+  labels:
+    app: kuzuk-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kuzuk-operator
+subjects:
+- kind: ServiceAccount
+  name: kuzuk-operator
+  namespace: kuzuk
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kuzuk-operator
+  namespace: kuzuk
+  labels:
+    app: kuzuk-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kuzuk-operator
+  template:
+    metadata:
+      labels:
+        app: kuzuk-operator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: kuzuk-operator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: operator
+        image: kuzuk-operator:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - python
+        - /app/controller.py
+        env:
+        - name: KOPF_LOG_LEVEL
+          value: "INFO"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: OPERATOR_NAME
+          value: "kuzuk-operator"
+        - name: OPERATOR_VERSION
+          value: "v1.0.0"
+        ports:
+        - containerPort: 8080
+          name: http-metrics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kuzuk-operator-metrics
+  namespace: kuzuk
+  labels:
+    app: kuzuk-operator
+spec:
+  selector:
+    app: kuzuk-operator
+  ports:
+  - name: http-metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kuzuk-operator
+  namespace: kuzuk
+  labels:
+    app: kuzuk-operator
+spec:
+  selector:
+    matchLabels:
+      app: kuzuk-operator
+  endpoints:
+  - port: http-metrics
+    interval: 30s
+    path: /metrics

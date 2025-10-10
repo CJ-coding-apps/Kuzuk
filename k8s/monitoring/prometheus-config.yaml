@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: kuzuk
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+    
+    scrape_configs:
+      # Kuzuk application metrics
+      - job_name: 'kuzuk'
+        static_configs:
+          - targets: ['kuzuk-service:9100']
+        metrics_path: /metrics
+        scrape_interval: 10s
+        scrape_timeout: 5s
+        
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+        - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: default;kubernetes;https
+          
+      # Kubernetes nodes
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+        - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+        - action: labelmap
+          regex: __meta_kubernetes_node_label_(.+)
+        - target_label: __address__
+          replacement: kubernetes.default.svc:443
+        - source_labels: [__meta_kubernetes_node_name]
+          regex: (.+)
+          target_label: __metrics_path__
+          replacement: /api/v1/nodes/${1}/proxy/metrics
+          
+      # Kubernetes pods
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+        - role: pod
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+          action: replace
+          target_label: __metrics_path__
+          regex: (.+)
+        - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+          target_label: __address__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: kubernetes_namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: kubernetes_pod_name
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: kuzuk
+data:
+  kuzuk.yml: |
+    groups:
+    - name: kuzuk-alerts
+      rules:
+      - alert: KuzukHighErrorRate
+        expr: rate(kuzu_queries_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in Kuzuk"
+          description: "Kuzuk error rate is {{ $value }} errors/sec for 5 minutes"
+      
+      - alert: KuzukHighLatency
+        expr: histogram_quantile(0.95, rate(kuzu_query_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High query latency in Kuzuk"
+          description: "95th percentile latency is {{ $value }} seconds"
+      
+      - alert: KuzukReplicaDown
+        expr: kuzu_healthy_replicas_count < kuzu_total_replicas_count * 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kuzuk replica availability low"
+          description: "Only {{ $value }} out of {{ kuzu_total_replicas_count }} replicas are healthy"
+      
+      - alert: KuzukMemoryUsage
+        expr: container_memory_usage_bytes{pod=~"kuzuk-.*"} / container_spec_memory_limit_bytes > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage in Kuzuk pod"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+      
+      - alert: KuzukCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{pod=~"kuzuk-.*"}[5m]) / container_spec_cpu_quota * container_spec_cpu_period > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage in Kuzuk pod"
+          description: "CPU usage is {{ $value | humanizePercentage }} of limit"

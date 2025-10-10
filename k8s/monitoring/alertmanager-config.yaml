@@ -1,0 +1,283 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: kuzuk
+  labels:
+    app: alertmanager
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'localhost:587'
+      smtp_from: 'alerts@kuzuk.io'
+      smtp_auth_username: 'alerts@kuzuk.io'
+      smtp_auth_password: '${SMTP_PASSWORD}'
+      slack_api_url: '${SLACK_API_URL}'
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+      resolve_timeout: 5m
+
+    templates:
+    - '/etc/alertmanager/templates/*.tmpl'
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+      routes:
+      # Critical alerts go to PagerDuty and Slack
+      - match:
+          severity: critical
+        receiver: 'critical-alerts'
+        group_wait: 5s
+        repeat_interval: 30m
+      
+      # Warning alerts go to Slack only
+      - match:
+          severity: warning
+        receiver: 'warning-alerts'
+        group_wait: 30s
+        repeat_interval: 2h
+      
+      # Kuzuk specific alerts
+      - match:
+          service: kuzuk
+        receiver: 'kuzu-alerts'
+        routes:
+        - match:
+            alertname: KuzukReplicaDown
+          receiver: 'critical-alerts'
+        - match:
+            alertname: KuzukHighLatency
+          receiver: 'performance-alerts'
+      
+      # Database alerts
+      - match:
+          component: database
+        receiver: 'database-alerts'
+      
+      # Infrastructure alerts
+      - match:
+          component: infrastructure
+        receiver: 'infrastructure-alerts'
+
+    receivers:
+    - name: 'web.hook'
+      webhook_configs:
+      - url: 'http://localhost:5001/'
+
+    # Critical alerts - PagerDuty + Slack + Email
+    - name: 'critical-alerts'
+      pagerduty_configs:
+      - routing_key: '${PAGERDUTY_ROUTING_KEY}'
+        description: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        details:
+          severity: '{{ .CommonLabels.severity }}'
+          cluster: '{{ .CommonLabels.cluster }}'
+          service: '{{ .CommonLabels.service }}'
+          description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        links:
+        - href: '${GRAFANA_URL}/d/kuzuk-overview'
+          text: 'View Dashboard'
+      
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#critical-alerts'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Severity:* {{ .Labels.severity }}
+          *Cluster:* {{ .Labels.cluster }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+        actions:
+        - type: button
+          text: 'View in Grafana'
+          url: '${GRAFANA_URL}/d/kuzuk-overview'
+        - type: button
+          text: 'Silence Alert'
+          url: '${ALERTMANAGER_URL}/#/silences/new'
+      
+      email_configs:
+      - to: 'oncall@company.com'
+        subject: '🚨 CRITICAL Kuzuk Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Critical alert in Kuzuk cluster:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Severity: {{ .Labels.severity }}
+          Cluster: {{ .Labels.cluster }}
+          Service: {{ .Labels.service }}
+          Description: {{ .Annotations.description }}
+          
+          Runbook: {{ .Annotations.runbook_url }}
+          Grafana: ${GRAFANA_URL}/d/kuzuk-overview
+          {{ end }}
+
+    # Warning alerts - Slack only
+    - name: 'warning-alerts'
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#alerts'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Severity:* {{ .Labels.severity }}
+          *Cluster:* {{ .Labels.cluster }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        actions:
+        - type: button
+          text: 'View in Grafana'
+          url: '${GRAFANA_URL}/d/kuzuk-overview'
+
+    # Kuzuk specific alerts
+    - name: 'kuzu-alerts'
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#kuzuk'
+        title: '🎯 Kuzuk: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Cluster:* {{ .Labels.cluster }}
+          *Replicas:* {{ .Labels.replicas }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        actions:
+        - type: button
+          text: 'View Kuzuk Dashboard'
+          url: '${GRAFANA_URL}/d/kuzuk-overview'
+        - type: button
+          text: 'View Replication Dashboard'
+          url: '${GRAFANA_URL}/d/kuzuk-replication'
+
+    # Performance alerts
+    - name: 'performance-alerts'
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#performance'
+        title: '📊 Performance Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Cluster:* {{ .Labels.cluster }}
+          *Current Value:* {{ .Annotations.value }}
+          *Threshold:* {{ .Annotations.threshold }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        actions:
+        - type: button
+          text: 'View Performance Dashboard'
+          url: '${GRAFANA_URL}/d/kuzuk-performance'
+
+    # Database alerts
+    - name: 'database-alerts'
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#database'
+        title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Database:* {{ .Labels.database }}
+          *Instance:* {{ .Labels.instance }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+    # Infrastructure alerts
+    - name: 'infrastructure-alerts'
+      slack_configs:
+      - api_url: '${SLACK_API_URL}'
+        channel: '#infrastructure'
+        title: '🏗️ Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Node:* {{ .Labels.node }}
+          *Instance:* {{ .Labels.instance }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+    inhibit_rules:
+    # Inhibit warning if critical is firing
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'cluster', 'service']
+    
+    # Inhibit replica alerts if cluster is down
+    - source_match:
+        alertname: 'KuzukClusterDown'
+      target_match_re:
+        alertname: 'Kuzuk.*Replica.*'
+      equal: ['cluster']
+    
+    # Inhibit individual node alerts if whole cluster is affected
+    - source_match:
+        alertname: 'KuzukClusterUnhealthy'
+      target_match_re:
+        alertname: 'Kuzuk.*Node.*'
+      equal: ['cluster']
+
+  # Custom alert templates
+  templates.tmpl: |
+    {{ define "slack.title" }}
+    {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ .GroupLabels.alertname }}
+    {{ end }}
+
+    {{ define "slack.text" }}
+    {{ range .Alerts }}
+    *Severity:* {{ .Labels.severity }}
+    *Summary:* {{ .Annotations.summary }}
+    {{ if .Labels.cluster }}*Cluster:* {{ .Labels.cluster }}{{ end }}
+    {{ if .Labels.service }}*Service:* {{ .Labels.service }}{{ end }}
+    {{ if .Annotations.description }}*Description:* {{ .Annotations.description }}{{ end }}
+    {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+    {{ end }}
+    {{ end }}
+
+    {{ define "email.subject" }}
+    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] Kuzuk Alert: {{ .GroupLabels.alertname }}
+    {{ end }}
+
+    {{ define "email.body" }}
+    <h2>Kuzuk Alert Notification</h2>
+    
+    <p><strong>Status:</strong> {{ .Status | title }}</p>
+    <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+    <p><strong>Cluster:</strong> {{ .GroupLabels.cluster }}</p>
+    
+    <h3>Alert Details:</h3>
+    <table border="1" cellpadding="5" cellspacing="0">
+      <tr>
+        <th>Alert</th>
+        <th>Severity</th>
+        <th>Summary</th>
+        <th>Description</th>
+        <th>Started</th>
+      </tr>
+      {{ range .Alerts }}
+      <tr>
+        <td>{{ .Labels.alertname }}</td>
+        <td>{{ .Labels.severity }}</td>
+        <td>{{ .Annotations.summary }}</td>
+        <td>{{ .Annotations.description }}</td>
+        <td>{{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}</td>
+      </tr>
+      {{ end }}
+    </table>
+    
+    <h3>Quick Actions:</h3>
+    <ul>
+      <li><a href="${GRAFANA_URL}/d/kuzuk-overview">View Cluster Dashboard</a></li>
+      <li><a href="${ALERTMANAGER_URL}">Manage Alerts</a></li>
+      <li><a href="{{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}">View Runbook</a></li>
+    </ul>
+    {{ end }}

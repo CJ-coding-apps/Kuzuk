@@ -1,0 +1,409 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kuzuks.kuzu.io
+  labels:
+    app: kuzuk-operator
+spec:
+  group: kuzu.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              # Cluster configuration
+              cluster:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: "Name of the Kuzuk cluster"
+                  replicas:
+                    type: integer
+                    minimum: 1
+                    maximum: 50
+                    default: 3
+                    description: "Number of read replicas"
+                  version:
+                    type: string
+                    default: "latest"
+                    description: "Kuzuk version to deploy"
+                required:
+                - name
+              
+              # Database configuration
+              database:
+                type: object
+                properties:
+                  storage:
+                    type: object
+                    properties:
+                      size:
+                        type: string
+                        default: "10Gi"
+                        description: "Storage size for database"
+                      storageClass:
+                        type: string
+                        description: "Storage class for persistent volumes"
+                      backup:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                            default: true
+                          schedule:
+                            type: string
+                            default: "0 2 * * *"
+                          retention:
+                            type: string
+                            default: "7d"
+                  replication:
+                    type: object
+                    properties:
+                      walRetention:
+                        type: string
+                        default: "24h"
+                        description: "WAL retention period"
+                      syncMode:
+                        type: string
+                        enum: ["async", "sync"]
+                        default: "async"
+                        description: "Replication synchronization mode"
+                      lagThreshold:
+                        type: string
+                        default: "5s"
+                        description: "Maximum acceptable replication lag"
+              
+              # Resource configuration
+              resources:
+                type: object
+                properties:
+                  master:
+                    type: object
+                    properties:
+                      cpu:
+                        type: string
+                        default: "1000m"
+                      memory:
+                        type: string
+                        default: "2Gi"
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                            default: "2000m"
+                          memory:
+                            type: string
+                            default: "4Gi"
+                  replica:
+                    type: object
+                    properties:
+                      cpu:
+                        type: string
+                        default: "500m"
+                      memory:
+                        type: string
+                        default: "1Gi"
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                            default: "1000m"
+                          memory:
+                            type: string
+                            default: "2Gi"
+              
+              # Scaling configuration
+              scaling:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  minReplicas:
+                    type: integer
+                    minimum: 1
+                    default: 2
+                  maxReplicas:
+                    type: integer
+                    maximum: 50
+                    default: 10
+                  targetCpuUtilization:
+                    type: integer
+                    minimum: 10
+                    maximum: 100
+                    default: 70
+                  targetMemoryUtilization:
+                    type: integer
+                    minimum: 10
+                    maximum: 100
+                    default: 80
+                  scaleDownPolicy:
+                    type: object
+                    properties:
+                      stabilizationWindow:
+                        type: string
+                        default: "300s"
+                      maxScaleDown:
+                        type: integer
+                        default: 1
+              
+              # Monitoring configuration
+              monitoring:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  prometheus:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      retention:
+                        type: string
+                        default: "30d"
+                      storage:
+                        type: string
+                        default: "20Gi"
+                  grafana:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      adminPassword:
+                        type: string
+                        description: "Grafana admin password (use secret reference)"
+                  alerting:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      channels:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              enum: ["slack", "email", "webhook", "pagerduty"]
+                            config:
+                              type: object
+                              additionalProperties: true
+              
+              # Security configuration
+              security:
+                type: object
+                properties:
+                  rbac:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                  networkPolicy:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                  podSecurityPolicy:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                  tls:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: false
+                      certManager:
+                        type: boolean
+                        default: false
+                      secretName:
+                        type: string
+            required:
+            - cluster
+          
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Deploying", "Running", "Scaling", "Updating", "Failed"]
+                description: "Current phase of the Kuzuk cluster"
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                      enum: ["True", "False", "Unknown"]
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              replicas:
+                type: object
+                properties:
+                  ready:
+                    type: integer
+                  total:
+                    type: integer
+                  updated:
+                    type: integer
+              master:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  endpoint:
+                    type: string
+                  version:
+                    type: string
+              observedGeneration:
+                type: integer
+              lastUpdateTime:
+                type: string
+                format: date-time
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Replicas
+      type: string
+      jsonPath: .status.replicas.ready
+    - name: Master Ready
+      type: boolean
+      jsonPath: .status.master.ready
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: kuzuks
+    singular: kuzuk
+    kind: Kuzuk
+    shortNames:
+    - ks
+    - kuzu
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kuzubackups.kuzu.io
+  labels:
+    app: kuzuk-operator
+spec:
+  group: kuzu.io
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              clusterRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+              schedule:
+                type: string
+                description: "Cron schedule for automated backups"
+              retention:
+                type: string
+                default: "7d"
+                description: "Backup retention period"
+              storage:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: ["s3", "gcs", "azure", "pv"]
+                    default: "pv"
+                  config:
+                    type: object
+                    additionalProperties: true
+              compression:
+                type: boolean
+                default: true
+              encryption:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: false
+                  keyRef:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      key:
+                        type: string
+            required:
+            - clusterRef
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: ["Pending", "Running", "Completed", "Failed"]
+              lastBackup:
+                type: string
+                format: date-time
+              nextBackup:
+                type: string
+                format: date-time
+              backupCount:
+                type: integer
+              size:
+                type: string
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Last Backup
+      type: string
+      jsonPath: .status.lastBackup
+    - name: Next Backup
+      type: string
+      jsonPath: .status.nextBackup
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: kuzubackups
+    singular: kuzubackup
+    kind: KuzuBackup
+    shortNames:
+    - kb
+    - backup

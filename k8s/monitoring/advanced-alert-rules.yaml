@@ -1,0 +1,318 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: advanced-alert-rules
+  namespace: kuzuk
+  labels:
+    app: prometheus
+data:
+  kuzu-advanced-alerts.yml: |
+    groups:
+    
+    # Critical System Alerts
+    - name: kuzu-critical-alerts
+      interval: 30s
+      rules:
+      
+      # Cluster-wide alerts
+      - alert: KuzukClusterDown
+        expr: up{job="kuzuk"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: cluster
+        annotations:
+          summary: "Kuzuk cluster is completely down"
+          description: "No Kuzuk instances are responding for more than 1 minute"
+          runbook_url: "https://docs.kuzuk.io/runbooks/cluster-down"
+          value: "{{ $value }}"
+      
+      - alert: KuzukMasterDown
+        expr: up{job="kuzuk",component="master"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: kuzuk
+          component: master
+        annotations:
+          summary: "Kuzuk master node is down"
+          description: "Master node {{ $labels.instance }} has been down for more than 30 seconds"
+          runbook_url: "https://docs.kuzuk.io/runbooks/master-down"
+      
+      - alert: KuzukReplicaMajorityDown
+        expr: (count(up{job="kuzuk",component="replica"} == 1) / count(up{job="kuzuk",component="replica"})) < 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: replica
+        annotations:
+          summary: "Majority of Kuzuk replicas are down"
+          description: "Less than 50% of replicas are healthy for more than 2 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/replica-majority-down"
+          value: "{{ $value | humanizePercentage }}"
+      
+      # Performance Critical Alerts
+      - alert: KuzukExtremelyHighLatency
+        expr: histogram_quantile(0.95, rate(kuzu_query_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: performance
+        annotations:
+          summary: "Extremely high query latency in Kuzuk"
+          description: "95th percentile latency is {{ $value }}s for more than 5 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/high-latency"
+          threshold: "10s"
+          value: "{{ $value }}s"
+      
+      - alert: KuzukQueryFailureSpike
+        expr: rate(kuzu_queries_failed_total[5m]) > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: query
+        annotations:
+          summary: "High query failure rate in Kuzuk"
+          description: "Query failure rate is {{ $value }} failures/sec for more than 2 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/query-failures"
+          value: "{{ $value }}/sec"
+      
+      # Replication Critical Alerts
+      - alert: KuzukReplicationLagCritical
+        expr: kuzu_replication_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: replication
+        annotations:
+          summary: "Critical replication lag in Kuzuk"
+          description: "Replica {{ $labels.replica_id }} has replication lag of {{ $value }}s"
+          runbook_url: "https://docs.kuzuk.io/runbooks/replication-lag"
+          value: "{{ $value }}s"
+          threshold: "60s"
+      
+      - alert: KuzukWALStreamingFailed
+        expr: rate(kuzu_wal_streaming_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          service: kuzuk
+          component: wal
+        annotations:
+          summary: "WAL streaming failures in Kuzuk"
+          description: "WAL streaming error rate is {{ $value }} errors/sec"
+          runbook_url: "https://docs.kuzuk.io/runbooks/wal-streaming"
+          value: "{{ $value }}/sec"
+    
+    # Warning Level Alerts
+    - name: kuzu-warning-alerts
+      interval: 60s
+      rules:
+      
+      - alert: KuzukHighLatency
+        expr: histogram_quantile(0.95, rate(kuzu_query_duration_seconds_bucket[10m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: performance
+        annotations:
+          summary: "High query latency in Kuzuk"
+          description: "95th percentile latency is {{ $value }}s for more than 10 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/performance-tuning"
+          value: "{{ $value }}s"
+          threshold: "2s"
+      
+      - alert: KuzukReplicaDown
+        expr: up{job="kuzuk",component="replica"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: replica
+        annotations:
+          summary: "Kuzuk replica is down"
+          description: "Replica {{ $labels.instance }} has been down for more than 5 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/replica-recovery"
+      
+      - alert: KuzukMemoryUsageHigh
+        expr: (kuzu_memory_usage_bytes / kuzu_memory_limit_bytes) > 0.85
+        for: 15m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: resources
+        annotations:
+          summary: "High memory usage in Kuzuk"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+          runbook_url: "https://docs.kuzuk.io/runbooks/memory-management"
+          value: "{{ $value | humanizePercentage }}"
+          threshold: "85%"
+      
+      - alert: KuzukCPUUsageHigh
+        expr: rate(kuzu_cpu_usage_seconds_total[5m]) > 0.8
+        for: 15m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: resources
+        annotations:
+          summary: "High CPU usage in Kuzuk"
+          description: "CPU usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+          runbook_url: "https://docs.kuzuk.io/runbooks/cpu-optimization"
+          value: "{{ $value | humanizePercentage }}"
+      
+      - alert: KuzukDiskSpaceUsageHigh
+        expr: (kuzu_disk_usage_bytes / kuzu_disk_total_bytes) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: storage
+        annotations:
+          summary: "High disk usage in Kuzuk"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+          runbook_url: "https://docs.kuzuk.io/runbooks/disk-management"
+          value: "{{ $value | humanizePercentage }}"
+          threshold: "85%"
+      
+      - alert: KuzukConnectionPoolExhaustion
+        expr: (kuzu_connection_pool_active / kuzu_connection_pool_max) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: connections
+        annotations:
+          summary: "Connection pool near exhaustion"
+          description: "Connection pool usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+          runbook_url: "https://docs.kuzuk.io/runbooks/connection-pool"
+          value: "{{ $value | humanizePercentage }}"
+      
+      - alert: KuzukSlowQueries
+        expr: histogram_quantile(0.50, rate(kuzu_query_duration_seconds_bucket[10m])) > 1
+        for: 20m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: performance
+        annotations:
+          summary: "Slow queries detected in Kuzuk"
+          description: "Median query time is {{ $value }}s, indicating slow queries"
+          runbook_url: "https://docs.kuzuk.io/runbooks/slow-queries"
+          value: "{{ $value }}s"
+    
+    # Business Logic Alerts
+    - name: kuzu-business-alerts
+      interval: 120s
+      rules:
+      
+      - alert: KuzukQueryThroughputDrop
+        expr: |
+          (
+            rate(kuzu_queries_total[10m]) < 
+            rate(kuzu_queries_total[1h] offset 1h) * 0.7
+          ) and 
+          rate(kuzu_queries_total[1h] offset 1h) > 10
+        for: 15m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: throughput
+        annotations:
+          summary: "Query throughput significantly dropped"
+          description: "Current query rate is 30% lower than the same time yesterday"
+          runbook_url: "https://docs.kuzuk.io/runbooks/throughput-analysis"
+      
+      - alert: KuzukUnusualErrorRate
+        expr: |
+          (
+            rate(kuzu_errors_total[30m]) > 
+            rate(kuzu_errors_total[1h] offset 1d) * 2
+          ) and 
+          rate(kuzu_errors_total[30m]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: errors
+        annotations:
+          summary: "Unusual error rate detected"
+          description: "Error rate is 2x higher than same time yesterday"
+          runbook_url: "https://docs.kuzuk.io/runbooks/error-analysis"
+      
+      - alert: KuzukFunctionShippingDegraded
+        expr: rate(kuzu_function_shipping_failures_total[10m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: function-shipping
+        annotations:
+          summary: "Function shipping experiencing failures"
+          description: "Function shipping failure rate is {{ $value }}/sec"
+          runbook_url: "https://docs.kuzuk.io/runbooks/function-shipping"
+          value: "{{ $value }}/sec"
+    
+    # Predictive Alerts
+    - name: kuzu-predictive-alerts
+      interval: 300s
+      rules:
+      
+      - alert: KuzukDiskWillFillIn4Hours
+        expr: predict_linear(kuzu_disk_usage_bytes[2h], 4*3600) > kuzu_disk_total_bytes * 0.95
+        for: 10m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: storage
+        annotations:
+          summary: "Disk will be full in 4 hours"
+          description: "Disk on {{ $labels.instance }} will be 95% full in 4 hours based on current growth rate"
+          runbook_url: "https://docs.kuzuk.io/runbooks/disk-cleanup"
+      
+      - alert: KuzukMemoryGrowthUnsustainable
+        expr: predict_linear(kuzu_memory_usage_bytes[1h], 2*3600) > kuzu_memory_limit_bytes
+        for: 15m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: resources
+        annotations:
+          summary: "Memory usage growing unsustainably"
+          description: "Memory on {{ $labels.instance }} will exceed limits in 2 hours"
+          runbook_url: "https://docs.kuzuk.io/runbooks/memory-leak-detection"
+    
+    # Health Check Alerts
+    - name: kuzu-health-alerts
+      interval: 30s
+      rules:
+      
+      - alert: KuzukHealthCheckFailing
+        expr: kuzu_health_check_success == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: health
+        annotations:
+          summary: "Health check failing"
+          description: "Health check for {{ $labels.instance }} has been failing for 2 minutes"
+          runbook_url: "https://docs.kuzuk.io/runbooks/health-check-failure"
+      
+      - alert: KuzukVersionMismatch
+        expr: count(count by (version) (kuzu_build_info)) > 1
+        for: 30m
+        labels:
+          severity: warning
+          service: kuzuk
+          component: deployment
+        annotations:
+          summary: "Version mismatch detected in cluster"
+          description: "Multiple versions of Kuzuk are running in the cluster"
+          runbook_url: "https://docs.kuzuk.io/runbooks/version-management"

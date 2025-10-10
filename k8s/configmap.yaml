@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kuzuk-config
+  namespace: kuzuk
+data:
+  # Application configuration
+  KUZU_REPLICA_COUNT: "3"
+  KUZU_REPLICATION_INTERVAL: "1.0"
+  KUZU_HEALTH_CHECK_INTERVAL: "30.0"
+  KUZU_ENABLE_FUNCTION_SHIPPING: "true"
+  KUZU_ENABLE_HEALTH_MONITORING: "true"
+  KUZU_DEFAULT_CONSISTENCY: "eventual"
+  
+  # Database configuration
+  KUZU_DB_DIR: "/data/kuzu_dbs"
+  KUZU_REPLICA_DIR: "/data/kuzu_replicas"
+  KUZU_WAL_DIR: "/data/kuzu_wal"
+  
+  # Network configuration
+  KUZU_TRANSPORT_HTTP_PORT: "8080"
+  KUZU_TRANSPORT_TCP_PORT: "9090"
+  KUZU_HEALTH_CHECK_PORT: "8081"
+  
+  # Monitoring configuration
+  PROMETHEUS_PORT: "9100"
+  METRICS_ENABLED: "true"
+  LOG_LEVEL: "INFO"

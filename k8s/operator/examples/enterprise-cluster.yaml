@@ -1,0 +1,109 @@
+apiVersion: kuzu.io/v1
+kind: Kuzuk
+metadata:
+  name: enterprise-kuzu-cluster
+  namespace: production
+spec:
+  cluster:
+    name: "enterprise-kuzu-cluster"
+    replicas: 10
+    version: "v1.2.0"
+  
+  database:
+    storage:
+      size: "1Ti"
+      storageClass: "premium-ssd"
+      backup:
+        enabled: true
+        schedule: "0 2 * * *"
+        retention: "30d"
+    replication:
+      walRetention: "72h"
+      syncMode: "sync"
+      lagThreshold: "1s"
+  
+  resources:
+    master:
+      cpu: "4000m"
+      memory: "16Gi"
+      limits:
+        cpu: "8000m"
+        memory: "32Gi"
+    replica:
+      cpu: "2000m"
+      memory: "8Gi"
+      limits:
+        cpu: "4000m"
+        memory: "16Gi"
+  
+  scaling:
+    enabled: true
+    minReplicas: 5
+    maxReplicas: 50
+    targetCpuUtilization: 60
+    targetMemoryUtilization: 70
+    scaleDownPolicy:
+      stabilizationWindow: "600s"
+      maxScaleDown: 2
+  
+  monitoring:
+    enabled: true
+    prometheus:
+      enabled: true
+      retention: "90d"
+      storage: "100Gi"
+    grafana:
+      enabled: true
+      adminPassword: "enterprise-secure-password"
+    alerting:
+      enabled: true
+      channels:
+      - type: "slack"
+        config:
+          webhook_url: "https://hooks.slack.com/enterprise/webhook"
+          channel: "#production-alerts"
+      - type: "pagerduty"
+        config:
+          integration_key: "your-pagerduty-integration-key"
+      - type: "email"
+        config:
+          smtp_host: "smtp.company.com"
+          from: "alerts@company.com"
+          to: ["oncall@company.com", "devops@company.com"]
+  
+  security:
+    rbac:
+      enabled: true
+    networkPolicy:
+      enabled: true
+    podSecurityPolicy:
+      enabled: true
+    tls:
+      enabled: true
+      certManager: true
+      secretName: "kuzu-cluster-tls"
+---
+apiVersion: kuzu.io/v1
+kind: KuzuBackup
+metadata:
+  name: enterprise-backup
+  namespace: production
+spec:
+  clusterRef:
+    name: enterprise-kuzu-cluster
+    namespace: production
+  schedule: "0 2 * * *"
+  retention: "30d"
+  storage:
+    type: "s3"
+    config:
+      bucket: "company-kuzu-backups"
+      region: "us-west-2"
+      endpoint: "s3.amazonaws.com"
+      credentials_secret: "s3-backup-credentials"
+  compression: true
+  encryption:
+    enabled: true
+    keyRef:
+      name: "backup-encryption-key"
+      key: "encryption.key"
