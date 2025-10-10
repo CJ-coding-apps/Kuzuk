@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import random
 
-from kuzuk import KuzukDriver, create_enterprise_scaled_driver
+from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
 from kuzuk.replication.manager import KuzuReplicationManager, ReplicationStatus
 from kuzuk.monitoring.health_monitor import NodeHealth
@@ -173,7 +173,7 @@ class TestReplicaFailover:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=3
             )
@@ -223,7 +223,7 @@ class TestReplicaFailover:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=4
             )
@@ -267,7 +267,7 @@ class TestReplicaFailover:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=2
             )
@@ -319,7 +319,7 @@ class TestNetworkPartitioning:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=3
             )
@@ -374,7 +374,7 @@ class TestPerformanceDegradation:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=3
             )
@@ -416,7 +416,7 @@ class TestPerformanceDegradation:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=4
             )
@@ -478,7 +478,7 @@ class TestDisasterRecovery:
             replica_dir.mkdir(exist_ok=True)
             
             # Create initial cluster
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=2
             )
@@ -495,7 +495,7 @@ class TestDisasterRecovery:
             await driver.close()
             
             # Simulate recovery - create new driver instance
-            recovery_driver = create_enterprise_scaled_driver(
+            recovery_driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=2
             )
@@ -531,7 +531,7 @@ class TestDisasterRecovery:
             replica_dir = Path(temp_dir) / "replicas"
             replica_dir.mkdir(exist_ok=True)
             
-            driver = create_enterprise_scaled_driver(
+            driver = create_enterprise_kuzuk_driver(
                 master_db_path=failover_test_database,
                 replica_count=3
             )

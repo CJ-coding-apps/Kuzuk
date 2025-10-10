@@ -72,8 +72,8 @@ def test_factory_functions():
     """Test factory function imports."""
     try:
         from kuzuk import (
-            create_simple_scaled_driver,
-            create_enterprise_scaled_driver
+            create_simple_kuzuk_driver,
+            create_enterprise_kuzuk_driver
         )
         print("✅ Factory functions import successful")
     except ImportError as e:

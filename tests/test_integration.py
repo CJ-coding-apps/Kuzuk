@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 import time
 
-from kuzuk import KuzukDriver, create_simple_scaled_driver, create_enterprise_scaled_driver
+from kuzuk import KuzukDriver, create_simple_kuzuk_driver, create_enterprise_kuzuk_driver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
 from kuzuk.replication.manager import KuzuReplicationManager
 from kuzuk.function_shipping.orchestrator import FunctionShippingOrchestrator, create_count_query
@@ -285,7 +285,7 @@ class TestScalableDriverIntegration:
     @pytest.mark.integration
     async def test_simple_scaled_driver_factory(self, sample_database, temp_db_dir):
         """Test simple scaled driver factory."""
-        driver = create_simple_scaled_driver(
+        driver = create_simple_kuzuk_driver(
             master_db_path=sample_database,
             replica_count=1
         )
@@ -309,7 +309,7 @@ class TestScalableDriverIntegration:
     @pytest.mark.integration
     async def test_enterprise_scaled_driver_factory(self, sample_database, temp_db_dir):
         """Test enterprise scaled driver factory."""
-        driver = create_enterprise_scaled_driver(
+        driver = create_enterprise_kuzuk_driver(
             master_db_path=sample_database,
             replica_count=3
         )

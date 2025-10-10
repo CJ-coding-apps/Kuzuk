@@ -8,7 +8,7 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from kuzuk import KuzukDriver, create_enterprise_scaled_driver
+from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver
 from kuzuk.function_shipping.orchestrator import create_count_query, create_distinct_query
 
 
@@ -165,7 +165,7 @@ class TestEndToEndScenarios:
         replica_dir.mkdir(exist_ok=True)
         
         # Create enterprise scaled driver
-        driver = create_enterprise_scaled_driver(
+        driver = create_enterprise_kuzuk_driver(
             master_db_path=sample_ecommerce_db,
             replica_count=3
         )

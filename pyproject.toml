@@ -128,5 +128,8 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests", 
     "slow: Slow tests",
-    "enterprise: Enterprise feature tests"
+    "enterprise: Enterprise feature tests",
+    "failover: Failover and disaster recovery tests",
+    "security: Security and penetration tests",
+    "performance: Performance and benchmark tests"
 ]
