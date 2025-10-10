@@ -2,11 +2,13 @@
 Pytest configuration and fixtures for Kuzuk tests.
 """
 
-import pytest
 import asyncio
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
+
+import pytest
+
 
 # Configure pytest markers
 def pytest_configure(config):
@@ -55,7 +57,9 @@ def temp_replica_dir(temp_test_dir):
 @pytest.fixture(autouse=True)
 def setup_test_id(request):
     """Set up unique test ID for file naming."""
-    pytest.current_test_id = request.node.name.replace("::", "_").replace("[", "_").replace("]", "_")
+    pytest.current_test_id = (
+        request.node.name.replace("::", "_").replace("[", "_").replace("]", "_")
+    )
 
 
 # Skip integration tests if KuzuDB is not available
@@ -63,12 +67,13 @@ def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle missing dependencies."""
     try:
         import kuzu
+
         kuzu_available = True
     except ImportError:
         kuzu_available = False
-    
+
     skip_integration = pytest.mark.skip(reason="KuzuDB not available")
-    
+
     for item in items:
         if "integration" in item.keywords and not kuzu_available:
             item.add_marker(skip_integration)
@@ -78,17 +83,9 @@ def pytest_collection_modifyitems(config, items):
 def pytest_addoption(parser):
     """Add custom command line options."""
     parser.addoption(
-        "--run-performance",
-        action="store_true",
-        default=False,
-        help="Run performance tests"
+        "--run-performance", action="store_true", default=False, help="Run performance tests"
     )
-    parser.addoption(
-        "--run-slow",
-        action="store_true", 
-        default=False,
-        help="Run slow tests"
-    )
+    parser.addoption("--run-slow", action="store_true", default=False, help="Run slow tests")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -98,7 +95,7 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "performance" in item.keywords:
                 item.add_marker(skip_performance)
-    
+
     if not config.getoption("--run-slow"):
         skip_slow = pytest.mark.skip(reason="need --run-slow option to run")
         for item in items:

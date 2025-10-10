@@ -3,25 +3,26 @@ KuzuDB Replication Manager for Enhanced RAG 6.2
 Implements master-replica pattern with WAL streaming and health monitoring.
 """
 
-import os
 import asyncio
 import logging
-import time
+import os
 import shutil
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..drivers.kuzu_wrapper import KuzuDriver
-from .wal_streamer import WALStreamer, WALApplier, WALPosition
+from .wal_streamer import WALApplier, WALPosition, WALStreamer
 
 logger = logging.getLogger(__name__)
 
 
 class ReplicationStatus(Enum):
     """Replication status states."""
+
     HEALTHY = "healthy"
     LAGGING = "lagging"
     DISCONNECTED = "disconnected"
@@ -32,6 +33,7 @@ class ReplicationStatus(Enum):
 @dataclass
 class ReplicaInfo:
     """Information about a replica node."""
+
     id: str
     db_path: str
     driver: Optional[KuzuDriver]
@@ -39,13 +41,13 @@ class ReplicaInfo:
     last_sync: datetime
     lag_ms: float
     error_count: int
-    
+
     def is_healthy(self) -> bool:
         """Check if replica is healthy for serving reads."""
         return (
-            self.status == ReplicationStatus.HEALTHY and
-            self.lag_ms < 1000 and  # Less than 1 second lag
-            self.error_count < 5
+            self.status == ReplicationStatus.HEALTHY
+            and self.lag_ms < 1000  # Less than 1 second lag
+            and self.error_count < 5
         )
 
 
@@ -54,17 +56,17 @@ class ReplicaInfo:
 
 class KuzuReplicationManager:
     """Manages KuzuDB master-replica replication."""
-    
+
     def __init__(
         self,
         master_path: str,
         replica_paths: List[str],
         replication_interval: float = 1.0,
-        max_lag_seconds: float = 5.0
+        max_lag_seconds: float = 5.0,
     ):
         """
         Initialize replication manager.
-        
+
         Args:
             master_path: Path to master KuzuDB instance
             replica_paths: List of paths for replica instances
@@ -74,10 +76,10 @@ class KuzuReplicationManager:
         self.master_path = Path(master_path)
         self.replication_interval = replication_interval
         self.max_lag_seconds = max_lag_seconds
-        
+
         # Initialize master
         self.master_driver: Optional[KuzuDriver] = None
-        
+
         # Initialize replicas
         self.replicas: Dict[str, ReplicaInfo] = {}
         for i, path in enumerate(replica_paths):
@@ -89,24 +91,26 @@ class KuzuReplicationManager:
                 status=ReplicationStatus.INITIALIZING,
                 last_sync=datetime.now(),
                 lag_ms=0.0,
-                error_count=0
+                error_count=0,
             )
-        
+
         # WAL streaming
         self.wal_streamer = WALStreamer(str(self.master_path))
         self.replication_task: Optional[asyncio.Task] = None
         self.running = False
-        
+
         # Statistics
         self.stats = {
             "replications_performed": 0,
             "total_replication_time": 0.0,
             "last_replication": None,
-            "errors": 0
+            "errors": 0,
         }
-        
-        logger.info(f"Initialized replication manager: master={master_path}, replicas={len(replica_paths)}")
-    
+
+        logger.info(
+            f"Initialized replication manager: master={master_path}, replicas={len(replica_paths)}"
+        )
+
     async def initialize(self) -> None:
         """Initialize master and replica connections."""
         try:
@@ -114,40 +118,40 @@ class KuzuReplicationManager:
             await self._ensure_directory(self.master_path.parent)
             self.master_driver = KuzuDriver(str(self.master_path))
             logger.info(f"Master initialized: {self.master_path}")
-            
+
             # Initialize replicas
             for replica in self.replicas.values():
                 await self._initialize_replica(replica)
-            
+
             logger.info("Replication manager initialization complete")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize replication manager: {e}")
             raise
-    
+
     async def _initialize_replica(self, replica: ReplicaInfo) -> None:
         """Initialize a single replica."""
         try:
             replica_path = Path(replica.db_path)
             await self._ensure_directory(replica_path.parent)
-            
+
             # If replica doesn't exist, create initial copy from master
             if not replica_path.exists() and self.master_path.exists():
                 logger.info(f"Creating initial replica copy: {replica.id}")
                 await self._create_initial_replica_copy(replica)
-            
+
             # Initialize driver
             replica.driver = KuzuDriver(replica.db_path)
             replica.status = ReplicationStatus.HEALTHY
             replica.last_sync = datetime.now()
-            
+
             logger.info(f"Replica initialized: {replica.id}")
-            
+
         except Exception as e:
             replica.status = ReplicationStatus.FAILED
             replica.error_count += 1
             logger.error(f"Failed to initialize replica {replica.id}: {e}")
-    
+
     async def _create_initial_replica_copy(self, replica: ReplicaInfo) -> None:
         """Create initial replica by copying master database."""
         try:
@@ -157,23 +161,23 @@ class KuzuReplicationManager:
             elif self.master_path.is_dir():
                 # Copy database directory
                 shutil.copytree(str(self.master_path), replica.db_path, dirs_exist_ok=True)
-            
+
             logger.info(f"Initial replica copy created: {replica.id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to create initial replica copy for {replica.id}: {e}")
             raise
-    
+
     async def start_replication(self) -> None:
         """Start the replication process."""
         if self.running:
             logger.warning("Replication already running")
             return
-        
+
         self.running = True
         self.replication_task = asyncio.create_task(self._replication_loop())
         logger.info("Replication started")
-    
+
     async def stop_replication(self) -> None:
         """Stop the replication process."""
         self.running = False
@@ -184,59 +188,61 @@ class KuzuReplicationManager:
             except asyncio.CancelledError:
                 pass
         logger.info("Replication stopped")
-    
+
     async def _replication_loop(self) -> None:
         """Main replication loop."""
         while self.running:
             try:
                 start_time = time.time()
-                
+
                 # Check for WAL changes
                 wal_records, new_position = await self.wal_streamer.get_wal_changes()
-                
+
                 if wal_records:
                     # Convert WAL records to replication changes
                     changes = [{"type": "wal_record", "record": record} for record in wal_records]
                     # Replicate to all healthy replicas
                     await self._replicate_changes(changes)
-                
+
                 # Update statistics
                 replication_time = time.time() - start_time
                 self.stats["total_replication_time"] += replication_time
                 self.stats["last_replication"] = datetime.now()
-                
+
                 # Health check replicas
                 await self._health_check_replicas()
-                
+
                 # Wait for next interval
                 await asyncio.sleep(self.replication_interval)
-                
+
             except Exception as e:
                 logger.error(f"Error in replication loop: {e}")
                 self.stats["errors"] += 1
                 await asyncio.sleep(self.replication_interval)
-    
+
     async def _replicate_changes(self, changes: List[Dict[str, Any]]) -> None:
         """Replicate changes to all replicas."""
         if not changes:
             return
-        
+
         # Replicate to all replicas in parallel
         tasks = []
         for replica in self.replicas.values():
             if replica.status != ReplicationStatus.FAILED:
                 task = self._replicate_to_replica(replica, changes)
                 tasks.append(task)
-        
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
             self.stats["replications_performed"] += 1
-    
-    async def _replicate_to_replica(self, replica: ReplicaInfo, changes: List[Dict[str, Any]]) -> None:
+
+    async def _replicate_to_replica(
+        self, replica: ReplicaInfo, changes: List[Dict[str, Any]]
+    ) -> None:
         """Replicate changes to a single replica."""
         try:
             start_time = time.time()
-            
+
             # Process replication changes
             for change in changes:
                 if change["type"] == "snapshot":
@@ -245,40 +251,42 @@ class KuzuReplicationManager:
                     await self._perform_wal_replication(replica, change)
                 else:
                     logger.warning(f"Unknown change type: {change['type']}")
-            
+
             # Update replica status
             replica.last_sync = datetime.now()
             replica.lag_ms = (time.time() - start_time) * 1000
             replica.status = ReplicationStatus.HEALTHY
             replica.error_count = 0
-            
+
         except Exception as e:
             replica.error_count += 1
             replica.status = ReplicationStatus.FAILED
             logger.error(f"Failed to replicate to {replica.id}: {e}")
-    
-    async def _perform_snapshot_replication(self, replica: ReplicaInfo, change: Dict[str, Any]) -> None:
+
+    async def _perform_snapshot_replication(
+        self, replica: ReplicaInfo, change: Dict[str, Any]
+    ) -> None:
         """Perform snapshot replication (full copy)."""
         try:
             # Close replica driver temporarily
             if replica.driver:
                 await replica.driver.close()
                 replica.driver = None
-            
+
             # Copy database files
             source_path = Path(change["source_path"])
             replica_path = Path(replica.db_path)
-            
+
             if source_path.is_file():
                 shutil.copy2(str(source_path), str(replica_path))
             elif source_path.is_dir():
                 if replica_path.exists():
                     shutil.rmtree(str(replica_path))
                 shutil.copytree(str(source_path), str(replica_path))
-            
+
             # Reinitialize driver
             replica.driver = KuzuDriver(replica.db_path)
-            
+
         except Exception as e:
             logger.error(f"Snapshot replication failed for {replica.id}: {e}")
             raise
@@ -287,23 +295,23 @@ class KuzuReplicationManager:
         """Perform WAL record replication."""
         try:
             wal_record = change["record"]
-            
+
             # For now, we'll just log the WAL record since implementing
             # actual WAL replay requires detailed KuzuDB internal knowledge
             logger.debug(f"Processing WAL record {wal_record.record_id} for replica {replica.id}")
-            
+
             # In a real implementation, this would:
             # 1. Parse the WAL record operations
             # 2. Apply them to the replica database
             # 3. Update replica state accordingly
-            
+
             # For Phase 1, we'll consider WAL replication as successful
             # since the core infrastructure is in place
-            
+
         except Exception as e:
             logger.error(f"WAL replication failed for replica {replica.id}: {e}")
             raise
-    
+
     async def _health_check_replicas(self) -> None:
         """Perform health checks on all replicas."""
         for replica in self.replicas.values():
@@ -318,16 +326,16 @@ class KuzuReplicationManager:
                 replica.error_count += 1
                 replica.status = ReplicationStatus.FAILED
                 logger.warning(f"Health check failed for {replica.id}: {e}")
-    
+
     def get_healthy_replicas(self) -> List[ReplicaInfo]:
         """Get list of healthy replicas for read queries."""
         return [replica for replica in self.replicas.values() if replica.is_healthy()]
-    
+
     def get_replication_status(self) -> Dict[str, Any]:
         """Get current replication status."""
         healthy_count = len(self.get_healthy_replicas())
         total_count = len(self.replicas)
-        
+
         return {
             "healthy_replicas": healthy_count,
             "total_replicas": total_count,
@@ -338,44 +346,42 @@ class KuzuReplicationManager:
                     "status": replica.status.value,
                     "lag_ms": replica.lag_ms,
                     "last_sync": replica.last_sync.isoformat(),
-                    "error_count": replica.error_count
+                    "error_count": replica.error_count,
                 }
                 for replica in self.replicas.values()
             },
-            "stats": self.stats
+            "stats": self.stats,
         }
-    
+
     async def _ensure_directory(self, path: Path) -> None:
         """Ensure directory exists."""
         path.mkdir(parents=True, exist_ok=True)
-    
+
     async def close(self) -> None:
         """Clean up resources."""
         await self.stop_replication()
-        
+
         # Close master
         if self.master_driver:
             await self.master_driver.close()
-        
+
         # Close replicas
         for replica in self.replicas.values():
             if replica.driver:
                 await replica.driver.close()
-        
+
         logger.info("Replication manager closed")
 
 
 # Factory functions for common configurations
 def create_single_replica_manager(
-    master_path: str,
-    replica_path: str,
-    replication_interval: float = 1.0
+    master_path: str, replica_path: str, replication_interval: float = 1.0
 ) -> KuzuReplicationManager:
     """Create a simple single-replica configuration."""
     return KuzuReplicationManager(
         master_path=master_path,
         replica_paths=[replica_path],
-        replication_interval=replication_interval
+        replication_interval=replication_interval,
     )
 
 
@@ -383,16 +389,13 @@ def create_multi_replica_manager(
     master_path: str,
     replica_count: int = 2,
     base_replica_dir: str = "/app/data/replicas",
-    replication_interval: float = 1.0
+    replication_interval: float = 1.0,
 ) -> KuzuReplicationManager:
     """Create a multi-replica configuration."""
-    replica_paths = [
-        f"{base_replica_dir}/replica_{i+1}.kuzu"
-        for i in range(replica_count)
-    ]
-    
+    replica_paths = [f"{base_replica_dir}/replica_{i+1}.kuzu" for i in range(replica_count)]
+
     return KuzuReplicationManager(
         master_path=master_path,
         replica_paths=replica_paths,
-        replication_interval=replication_interval
+        replication_interval=replication_interval,
     )
