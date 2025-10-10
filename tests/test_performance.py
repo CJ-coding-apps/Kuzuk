@@ -401,7 +401,6 @@ class TestScalableDriverPerformance:
         driver = KuzukDriver(
             master_db_path=benchmark_database,
             replica_count=2,
-            base_replica_dir=str(replica_dir),
             enable_function_shipping=True,
             enable_health_monitoring=False,  # Disable for pure performance test
         )
@@ -456,7 +455,6 @@ class TestScalableDriverPerformance:
         driver_no_health = KuzukDriver(
             master_db_path=benchmark_database,
             replica_count=1,
-            base_replica_dir=str(replica_dir),
             enable_health_monitoring=False,
         )
 
@@ -464,7 +462,6 @@ class TestScalableDriverPerformance:
         driver_with_health = KuzukDriver(
             master_db_path=benchmark_database,
             replica_count=1,
-            base_replica_dir=str(replica_dir),
             enable_health_monitoring=True,
         )
 
