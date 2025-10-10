@@ -339,7 +339,6 @@ class TestEndToEndScenarios:
         driver = KuzukDriver(
             master_db_path=sample_ecommerce_db,
             replica_count=2,
-            base_replica_dir=str(replica_dir),
             enable_function_shipping=True,
             enable_health_monitoring=True,
         )
@@ -391,7 +390,7 @@ class TestEndToEndScenarios:
         replica_dir.mkdir(exist_ok=True)
 
         driver = KuzukDriver(
-            master_db_path=sample_ecommerce_db, replica_count=1, base_replica_dir=str(replica_dir)
+            master_db_path=sample_ecommerce_db, replica_count=1
         )
 
         try:
