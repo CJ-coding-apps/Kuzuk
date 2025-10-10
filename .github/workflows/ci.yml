@@ -31,7 +31,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
     
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
@@ -65,7 +65,7 @@ jobs:
       run: bandit -r kuzuk/ -f json -o security-report.json
     
     - name: Upload security report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-report
@@ -103,11 +103,12 @@ jobs:
         python tests/run_tests.py --unit --coverage --verbose
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
-        file: ./htmlcov/coverage.xml
+        files: ./htmlcov/coverage.xml
         flags: unit-tests
         name: unit-tests-${{ matrix.python-version }}
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   integration-tests:
     name: Integration Tests
@@ -138,7 +139,7 @@ jobs:
         python tests/run_tests.py --integration --coverage --verbose
     
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: integration-test-results
@@ -193,7 +194,7 @@ jobs:
         python tests/run_tests.py --performance --verbose
     
     - name: Upload performance report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-report
         path: test-results/performance-report.html
