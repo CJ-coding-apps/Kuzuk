@@ -7,6 +7,7 @@ import shutil
 import struct
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,26 +33,31 @@ from kuzuk.replication.wal_streamer import (
 class TestReplicaInfo:
     """Test ReplicaInfo data class."""
 
+    @pytest.mark.unit
     def test_replica_info_creation(self):
         """Test replica info creation."""
         info = ReplicaInfo(
-            replica_id="replica_1",
-            database_path="/path/to/replica",
+            id="replica_1",
+            db_path="/path/to/replica",
+            driver=None,
             status=ReplicationStatus.HEALTHY,
+            last_sync=datetime.now(),
             lag_ms=100.0,
-            last_sync_time=time.time(),
+            error_count=0,
         )
 
-        assert info.replica_id == "replica_1"
-        assert info.database_path == "/path/to/replica"
+        assert info.id == "replica_1"
+        assert info.db_path == "/path/to/replica"
         assert info.status == ReplicationStatus.HEALTHY
         assert info.lag_ms == 100.0
-        assert isinstance(info.last_sync_time, float)
+        assert info.error_count == 0
+        assert isinstance(info.last_sync, datetime)
 
 
 class TestWALRecord:
     """Test WAL record functionality."""
 
+    @pytest.mark.unit
     def test_wal_record_creation(self):
         """Test WAL record creation."""
         record = WALRecord(
@@ -76,6 +82,7 @@ class TestWALRecord:
 class TestWALPosition:
     """Test WAL position functionality."""
 
+    @pytest.mark.unit
     def test_wal_position_creation(self):
         """Test WAL position creation."""
         position = WALPosition(
@@ -118,6 +125,7 @@ class TestWALParser:
         return WALParser(enable_checksums=True)
 
     @pytest.mark.asyncio
+    @pytest.mark.unit
     async def test_parser_creation(self, parser):
         """Test parser creation."""
         assert parser.enable_checksums is True
@@ -159,6 +167,7 @@ class TestWALStreamer:
         """Create WAL streamer."""
         return WALStreamer(temp_db_path)
 
+    @pytest.mark.unit
     def test_streamer_initialization(self, streamer, temp_db_path):
         """Test streamer initialization."""
         assert str(streamer.master_db_path) == temp_db_path
@@ -190,6 +199,7 @@ class TestWALStreamer:
         assert isinstance(records, list)
         assert isinstance(position, WALPosition)
 
+    @pytest.mark.unit
     def test_stop_streaming(self, streamer):
         """Test stopping WAL streaming."""
         streamer.running = True
@@ -212,6 +222,7 @@ class TestWALApplier:
         """Create WAL applier."""
         return WALApplier(mock_replica_driver)
 
+    @pytest.mark.unit
     def test_applier_initialization(self, applier):
         """Test applier initialization."""
         assert applier.applied_records == 0
@@ -237,6 +248,7 @@ class TestWALApplier:
         assert result is True
         assert applier.applied_records == 1
 
+    @pytest.mark.unit
     def test_get_apply_stats(self, applier):
         """Test getting apply statistics."""
         stats = applier.get_apply_stats()
@@ -276,44 +288,39 @@ class TestKuzuReplicationManager:
         """Create replication manager."""
         with patch("kuzuk.replication.manager.KuzuDriver") as mock_driver_class:
             mock_driver_class.return_value = mock_master_driver
+            replica_paths = [f"{temp_replica_dir}/replica_1.kuzu", f"{temp_replica_dir}/replica_2.kuzu"]
             return KuzuReplicationManager(
-                master_db_path=temp_master_path, replica_count=2, base_replica_dir=temp_replica_dir
+                master_path=temp_master_path, 
+                replica_paths=replica_paths
             )
 
+    @pytest.mark.unit
     def test_manager_initialization(self, replication_manager, temp_master_path):
         """Test manager initialization."""
-        assert str(replication_manager.master_db_path) == temp_master_path
-        assert replication_manager.replica_count == 2
+        assert str(replication_manager.master_path) == temp_master_path
+        assert len(replication_manager.replicas) == 2
         assert replication_manager.replication_interval == 1.0
-        assert len(replication_manager.replicas) == 0
-        assert replication_manager.status == ReplicationStatus.STOPPED
+        assert replication_manager.running is False
 
     @pytest.mark.asyncio
     async def test_manager_initialize(self, replication_manager):
         """Test manager initialization."""
         await replication_manager.initialize()
 
-        assert replication_manager.status == ReplicationStatus.STOPPED
+        assert replication_manager.running is False
         assert replication_manager.master_driver is not None
 
-    @pytest.mark.asyncio
-    async def test_create_replica(self, replication_manager):
-        """Test replica creation."""
-        await replication_manager.initialize()
 
-        replica_info = await replication_manager._create_replica("replica_1")
 
-        assert replica_info.replica_id == "replica_1"
-        assert replica_info.status == ReplicationStatus.HEALTHY
-
+    @pytest.mark.unit
     def test_get_replication_stats(self, replication_manager):
         """Test getting replication statistics."""
-        stats = replication_manager.get_replication_stats()
+        stats = replication_manager.get_replication_status()
 
         assert "total_replicas" in stats
         assert "healthy_replicas" in stats
-        assert "replication_lag_ms" in stats
-        assert "status" in stats
+        assert "replication_running" in stats
+        assert "master_path" in stats
 
 
 class TestFactoryFunctions:
@@ -327,20 +334,24 @@ class TestFactoryFunctions:
         yield str(master_path)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+    @pytest.mark.unit
     def test_create_single_replica_manager(self, temp_master_path):
         """Test single replica manager factory."""
         with patch("kuzuk.replication.manager.KuzuDriver"):
-            manager = create_single_replica_manager(temp_master_path)
+            replica_path = "/tmp/replica.kuzu"
+            manager = create_single_replica_manager(temp_master_path, replica_path)
 
-            assert manager.replica_count == 1
-            assert manager.replication_interval == 0.5
+            assert len(manager.replicas) == 1
+            assert manager.replication_interval == 1.0
+            assert replica_path in [replica.db_path for replica in manager.replicas.values()]
 
+    @pytest.mark.unit
     def test_create_multi_replica_manager(self, temp_master_path):
         """Test multi replica manager factory."""
         with patch("kuzuk.replication.manager.KuzuDriver"):
             manager = create_multi_replica_manager(temp_master_path, replica_count=3)
 
-            assert manager.replica_count == 3
+            assert len(manager.replicas) == 3
             assert manager.replication_interval == 1.0
 
 

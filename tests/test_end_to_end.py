@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver
 from kuzuk.function_shipping.orchestrator import create_count_query, create_distinct_query
@@ -21,7 +22,7 @@ def temp_db_dir():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_ecommerce_db(temp_db_dir):
     """Create a sample e-commerce database for end-to-end testing."""
     from kuzuk.drivers.kuzu_wrapper import KuzuDriver

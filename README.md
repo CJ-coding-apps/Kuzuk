@@ -423,17 +423,6 @@ await monitor.start_monitoring()
 - **🐛 GitHub Issues**: [Report bugs and request features](https://github.com/kuzuk/issues)
 - **📋 Professional Services**: Architecture consulting and custom development
 
-## 🏢 **Enterprise Adoption**
-
-Kuzuk is trusted by enterprises for mission-critical workloads:
-
-```
-"Kuzuk enabled us to scale our knowledge graph from 10M to 1B+ nodes 
-while maintaining sub-100ms query response times. The Kubernetes operator 
-made deployment and operations seamless."
-— Senior Engineering Manager, Fortune 500 Technology Company
-```
-
 ### **Production Deployments**
 - **🏦 Financial Services**: Real-time fraud detection with 99.99% uptime
 - **🛒 E-commerce**: Recommendation engines processing 100K+ QPS  
@@ -454,6 +443,9 @@ We welcome contributions from the community!
 Kuzuk is released under the **MIT License** - see [LICENSE](LICENSE) for details.
 
 **Commercial licensing** and **enterprise support** are available for organizations requiring additional compliance, support, or customization.
+
+## 📄 **Disclaimer** 
+Kuzuk is an independent open-source project and is not officially affiliated with KuzuDB.
 
 ## 🔗 **Ecosystem Links**
 

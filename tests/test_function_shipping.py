@@ -32,6 +32,8 @@ from kuzuk.function_shipping.transport import (
 class TestAnalyticalQuery:
     """Test AnalyticalQuery data class."""
 
+    @pytest.mark.unit
+    @pytest.mark.unit
     def test_query_creation(self):
         """Test query creation and serialization."""
         query = AnalyticalQuery(
@@ -50,6 +52,7 @@ class TestAnalyticalQuery:
         assert query.timeout_seconds == 30.0
         assert query.aggregation_function == "count"
 
+    @pytest.mark.unit
     def test_query_serialization(self):
         """Test query to_dict and from_dict."""
         query = AnalyticalQuery(
@@ -72,6 +75,7 @@ class TestAnalyticalQuery:
 class TestQueryResult:
     """Test QueryResult data class."""
 
+    @pytest.mark.unit
     def test_result_creation(self):
         """Test query result creation."""
         result = QueryResult(
@@ -118,6 +122,7 @@ class TestResultAggregator:
             ),
         ]
 
+    @pytest.mark.unit
     def test_aggregate_count_results(self, sample_count_results):
         """Test count result aggregation."""
         aggregated = ResultAggregator.aggregate_count_results(sample_count_results)
@@ -128,6 +133,7 @@ class TestResultAggregator:
         assert aggregated.nodes_used == 3
         assert aggregated.total_execution_time_ms == 120  # max(100, 120, 90)
 
+    @pytest.mark.unit
     def test_aggregate_distinct_results(self, sample_distinct_results):
         """Test distinct result aggregation."""
         aggregated = ResultAggregator.aggregate_distinct_results(sample_distinct_results)
@@ -137,6 +143,7 @@ class TestResultAggregator:
         assert aggregated.aggregation_method == "distinct_union"
         assert aggregated.nodes_used == 3
 
+    @pytest.mark.unit
     def test_aggregate_first_result(self, sample_count_results):
         """Test first result aggregation."""
         aggregated = ResultAggregator.aggregate_first_result(sample_count_results)
@@ -151,6 +158,7 @@ class TestResultAggregator:
 class TestQuerySerializer:
     """Test query serialization."""
 
+    @pytest.mark.unit
     def test_serialize_deserialize_query(self):
         """Test query serialization and deserialization."""
         query = AnalyticalQuery(
@@ -194,6 +202,7 @@ class TestFunctionShippingOrchestrator:
         """Create orchestrator with mock nodes."""
         return FunctionShippingOrchestrator(mock_nodes)
 
+    @pytest.mark.unit
     def test_orchestrator_initialization(self, mock_nodes):
         """Test orchestrator initialization."""
         orchestrator = FunctionShippingOrchestrator(mock_nodes)
@@ -241,6 +250,7 @@ class TestFunctionShippingOrchestrator:
         assert result.nodes_used == 1
         assert result.aggregation_method == "first_result"
 
+    @pytest.mark.unit
     def test_get_performance_stats(self, orchestrator):
         """Test performance statistics."""
         stats = orchestrator.get_performance_stats()
@@ -255,6 +265,7 @@ class TestFunctionShippingOrchestrator:
 class TestNetworkTransport:
     """Test network transport functionality."""
 
+    @pytest.mark.unit
     def test_node_endpoint_creation(self):
         """Test node endpoint creation."""
         endpoint = create_http_endpoint("node_1", "localhost", 8080)
@@ -265,6 +276,7 @@ class TestNetworkTransport:
         assert endpoint.port == 8080
         assert endpoint.get_url() == "http://localhost:8080/query"
 
+    @pytest.mark.unit
     def test_tcp_endpoint_creation(self):
         """Test TCP endpoint creation."""
         endpoint = create_tcp_endpoint("node_1", "localhost", 9090)
@@ -272,6 +284,7 @@ class TestNetworkTransport:
         assert endpoint.protocol == TransportProtocol.TCP
         assert endpoint.get_url() == "localhost:9090"
 
+    @pytest.mark.unit
     def test_transport_manager_initialization(self):
         """Test transport manager initialization."""
         manager = NetworkTransportManager()
@@ -279,6 +292,7 @@ class TestNetworkTransport:
         assert len(manager.endpoints) == 0
         assert manager.stats["requests_sent"] == 0
 
+    @pytest.mark.unit
     def test_register_endpoint(self):
         """Test endpoint registration."""
         manager = NetworkTransportManager()
@@ -289,6 +303,7 @@ class TestNetworkTransport:
         assert "node_1" in manager.endpoints
         assert manager.endpoints["node_1"] == endpoint
 
+    @pytest.mark.unit
     def test_unregister_endpoint(self):
         """Test endpoint unregistration."""
         manager = NetworkTransportManager()
@@ -303,6 +318,7 @@ class TestNetworkTransport:
 class TestFactoryFunctions:
     """Test factory functions."""
 
+    @pytest.mark.unit
     def test_create_count_query(self):
         """Test count query factory."""
         query = create_count_query("count_test", "MATCH (n) RETURN count(n)")
@@ -312,6 +328,7 @@ class TestFactoryFunctions:
         assert query.aggregation_function == "count"
         assert query.timeout_seconds == 30.0
 
+    @pytest.mark.unit
     def test_create_distinct_query(self):
         """Test distinct query factory."""
         query = create_distinct_query("distinct_test", "MATCH (n) RETURN DISTINCT n.name")
@@ -321,6 +338,7 @@ class TestFactoryFunctions:
         assert query.aggregation_function == "distinct"
         assert query.timeout_seconds == 60.0
 
+    @pytest.mark.unit
     def test_create_fastest_first_query(self):
         """Test fastest-first query factory."""
         query = create_fastest_first_query("fast_test", "RETURN 1")

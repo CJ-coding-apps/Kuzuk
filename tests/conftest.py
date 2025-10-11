@@ -17,9 +17,15 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "integration: Integration tests requiring KuzuDB")
     config.addinivalue_line("markers", "performance: Performance benchmarks")
     config.addinivalue_line("markers", "slow: Slow tests")
+    config.addinivalue_line("markers", "failover: Failover and disaster recovery tests")
+    config.addinivalue_line("markers", "security: Security and penetration tests")
+    config.addinivalue_line("markers", "enterprise: Enterprise-level functionality tests")
+    config.addinivalue_line("markers", "end_to_end: End-to-end integration tests")
 
 
 # Configure asyncio event loop for tests
+pytest_plugins = ("pytest_asyncio",)
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for the test session."""

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from kuzuk import KuzukDriver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
@@ -94,7 +95,7 @@ def security_test_suite():
     return SecurityTestSuite()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def secure_test_database():
     """Create a test database with security considerations."""
     temp_dir = tempfile.mkdtemp()

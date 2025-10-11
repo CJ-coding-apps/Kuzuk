@@ -35,6 +35,7 @@ class TestKuzuDriver:
         """Create KuzuDriver instance."""
         return KuzuDriver(temp_db_path)
 
+    @pytest.mark.unit
     def test_driver_initialization(self, temp_db_path):
         """Test driver initialization parameters."""
         driver = KuzuDriver(
@@ -52,6 +53,7 @@ class TestKuzuDriver:
         assert driver.read_only is True
         assert driver._initialized is False
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_driver_initialize(self, driver):
         """Test driver initialization."""
@@ -63,6 +65,7 @@ class TestKuzuDriver:
         assert driver.database is not None
         assert driver.connection is not None
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_driver_double_initialize(self, driver):
         """Test that double initialization is safe."""
@@ -75,6 +78,7 @@ class TestKuzuDriver:
         assert driver.database is first_db
         assert driver.connection is first_conn
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_execute_query(self, driver):
         """Test query execution."""
@@ -84,6 +88,7 @@ class TestKuzuDriver:
         assert "rows" in result
         assert "columns" in result
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_execute_read_query(self, driver):
         """Test read query execution."""
@@ -91,6 +96,7 @@ class TestKuzuDriver:
 
         assert result["success"] is True
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_execute_write_query_read_only(self, temp_db_path):
         """Test write query fails on read-only driver."""
@@ -99,6 +105,7 @@ class TestKuzuDriver:
         with pytest.raises(RuntimeError, match="Cannot execute write queries"):
             await driver.execute_write_query("CREATE NODE TABLE test(id INT64, PRIMARY KEY(id))")
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_health_check(self, driver):
         """Test health check functionality."""
@@ -109,6 +116,7 @@ class TestKuzuDriver:
         assert "checks" in health
         assert "response_time_ms" in health
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_get_schema_info(self, driver):
         """Test schema information retrieval."""
@@ -119,6 +127,7 @@ class TestKuzuDriver:
         assert "rel_tables" in schema
         assert "total_tables" in schema
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_prepare_statement(self, driver):
         """Test statement preparation."""
@@ -126,6 +135,7 @@ class TestKuzuDriver:
 
         assert stmt is not None
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_execute_prepared(self, driver):
         """Test prepared statement execution."""
@@ -134,12 +144,14 @@ class TestKuzuDriver:
 
         assert result["success"] is True
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_transaction_context(self, driver):
         """Test transaction context manager."""
         async with driver.transaction() as tx:
             assert tx is driver
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_driver_close(self, driver):
         """Test driver cleanup."""
@@ -169,6 +181,7 @@ class TestKuzuDriverPool:
         """Create KuzuDriverPool instance."""
         return KuzuDriverPool(temp_db_path, pool_size=3)
 
+    @pytest.mark.unit
     def test_pool_initialization(self, temp_db_path):
         """Test pool initialization."""
         pool = KuzuDriverPool(temp_db_path, pool_size=5)
@@ -178,6 +191,7 @@ class TestKuzuDriverPool:
         assert not pool._initialized
         assert len(pool.pool) == 0
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_pool_initialize(self, pool):
         """Test pool initialization."""
@@ -189,6 +203,7 @@ class TestKuzuDriverPool:
         assert len(pool.pool) == 3
         assert pool.available.qsize() == 3
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_pool_get_connection(self, pool):
         """Test getting connection from pool."""
@@ -201,6 +216,7 @@ class TestKuzuDriverPool:
         # Connection should be returned to pool
         assert pool.available.qsize() == 3
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_pool_close(self, pool):
         """Test pool cleanup."""
@@ -224,6 +240,7 @@ class TestDriverFactories:
         yield str(db_path)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+    @pytest.mark.unit
     def test_create_read_only_driver(self, temp_db_path):
         """Test read-only driver factory."""
         driver = create_read_only_driver(temp_db_path)
@@ -231,6 +248,7 @@ class TestDriverFactories:
         assert driver.read_only is True
         assert driver.buffer_pool_size == 512 * 1024 * 1024
 
+    @pytest.mark.unit
     def test_create_write_driver(self, temp_db_path):
         """Test write driver factory."""
         driver = create_write_driver(temp_db_path)
@@ -238,6 +256,7 @@ class TestDriverFactories:
         assert driver.read_only is False
         assert driver.buffer_pool_size == 1024 * 1024 * 1024
 
+    @pytest.mark.unit
     def test_create_high_performance_driver(self, temp_db_path):
         """Test high-performance driver factory."""
         driver = create_high_performance_driver(temp_db_path)
@@ -252,6 +271,7 @@ class TestDriverFactories:
 class TestMockImplementation:
     """Test mock implementation when KuzuDB is not available."""
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_mock_driver_works(self):
         """Test that mock driver works when KuzuDB is not available."""

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import psutil
 import pytest
+import pytest_asyncio
 
 from kuzuk import KuzukDriver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver, KuzuDriverPool
@@ -86,10 +87,10 @@ def temp_db_dir():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def benchmark_database(temp_db_dir):
     """Create a database with benchmark data."""
-    db_path = Path(temp_dir) / "benchmark.kuzu"
+    db_path = Path(temp_db_dir) / "benchmark.kuzu"
     driver = KuzuDriver(str(db_path))
 
     try:

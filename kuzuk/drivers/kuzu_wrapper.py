@@ -437,19 +437,35 @@ class KuzuDriver:
                 "schema_version": None,
             }
 
-            # For now, just return basic schema info since show_tables() syntax varies by version
-            schema_info["total_tables"] = 0
-            return schema_info
+            # Query for table schema information
+            try:
+                tables_result = await self.execute_query("CALL show_tables() RETURN name, type, comment")
+            except Exception:
+                # Fallback for older KuzuDB versions or if show_tables() is not available
+                logger.warning("show_tables() not available, returning basic schema info")
+                schema_info["total_tables"] = 0
+                return schema_info
 
             if tables_result.get("success"):
                 tables = tables_result.get("rows", [])
                 schema_info["total_tables"] = len(tables)
 
                 for table in tables:
+                    # Handle both dict and list formats from KuzuDB
+                    if isinstance(table, dict):
+                        table_name = table.get("name", "")
+                        table_type = table.get("type", "")
+                        table_comment = table.get("comment", "")
+                    else:
+                        # Handle list format [name, type, comment]
+                        table_name = table[0] if len(table) > 0 else ""
+                        table_type = table[1] if len(table) > 1 else ""
+                        table_comment = table[2] if len(table) > 2 else ""
+                    
                     table_info = {
-                        "name": table.get("name", ""),
-                        "type": table.get("type", ""),
-                        "comment": table.get("comment", ""),
+                        "name": table_name,
+                        "type": table_type,
+                        "comment": table_comment,
                         "properties": [],
                     }
 
@@ -466,9 +482,10 @@ class KuzuDriver:
                         )
 
                     # Categorize tables
-                    if table_info["type"].upper() in ["NODE", "NODE_TABLE"]:
+                    table_type = table_info["type"]
+                    if table_type and table_type.upper() in ["NODE", "NODE_TABLE"]:
                         schema_info["node_tables"].append(table_info)
-                    elif table_info["type"].upper() in ["REL", "RELATIONSHIP", "REL_TABLE"]:
+                    elif table_type and table_type.upper() in ["REL", "RELATIONSHIP", "REL_TABLE"]:
                         schema_info["rel_tables"].append(table_info)
 
             # Try to get database statistics

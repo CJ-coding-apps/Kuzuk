@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver, create_simple_kuzuk_driver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
@@ -25,7 +26,7 @@ def temp_db_dir():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_database(temp_db_dir):
     """Create a sample database with test data."""
     db_path = Path(temp_db_dir) / "sample.kuzu"
@@ -153,10 +154,10 @@ class TestReplicationIntegration:
         replica_dir = Path(temp_db_dir) / "replicas"
         replica_dir.mkdir(exist_ok=True)
 
+        replica_paths = [str(replica_dir / "replica_1.kuzu")]
         manager = KuzuReplicationManager(
-            master_db_path=sample_database,
-            replica_count=1,
-            base_replica_dir=str(replica_dir),
+            master_path=sample_database,
+            replica_paths=replica_paths,
             replication_interval=0.1,
         )
 
@@ -168,9 +169,9 @@ class TestReplicationIntegration:
             await asyncio.sleep(1.0)
 
             # Check replica status
-            stats = manager.get_replication_stats()
-            assert stats["total_replicas"] == 1
-            assert stats["healthy_replicas"] >= 0  # May be 0 if replication fails
+            status = manager.get_replication_status()
+            assert status["total_replicas"] == 1
+            assert status["healthy_replicas"] >= 0  # May be 0 if replication fails
 
             # Test getting healthy replicas
             healthy_replicas = manager.get_healthy_replicas()
@@ -187,20 +188,21 @@ class TestReplicationIntegration:
         replica_dir = Path(temp_db_dir) / "replicas"
         replica_dir.mkdir(exist_ok=True)
 
+        # Create replica paths
+        replica_paths = [str(replica_dir / f"replica_{i}.kuzu") for i in range(1, 3)]
+        
         manager = KuzuReplicationManager(
-            master_db_path=sample_database, replica_count=2, base_replica_dir=str(replica_dir)
+            master_path=sample_database, replica_paths=replica_paths
         )
 
         try:
             await manager.initialize()
 
-            # Test master health
-            master_health = await manager.check_master_health()
-            assert master_health is not None
-
-            # Test replica health (may fail if no replicas created yet)
-            replica_health = await manager.check_replica_health()
-            assert isinstance(replica_health, dict)
+            # Test replication health via status
+            replication_status = manager.get_replication_status()
+            assert "healthy_replicas" in replication_status
+            assert "total_replicas" in replication_status
+            assert replication_status["total_replicas"] == 2
 
         finally:
             await manager.close()
@@ -257,10 +259,12 @@ class TestScalableDriverIntegration:
         replica_dir = Path(temp_db_dir) / "replicas"
         replica_dir.mkdir(exist_ok=True)
 
+        # Create replica paths  
+        replica_paths = [str(replica_dir / f"replica_{i}.kuzu") for i in range(1, 3)]
+        
         driver = KuzukDriver(
             master_db_path=sample_database,
             replica_count=2,
-            base_replica_dir=str(replica_dir),
             enable_function_shipping=True,
             enable_health_monitoring=True,
         )

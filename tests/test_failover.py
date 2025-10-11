@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import psutil
 import pytest
+import pytest_asyncio
 
 from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
@@ -121,7 +122,7 @@ class FailoverTestSuite:
         return consistency_results
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def failover_test_database():
     """Create a test database for failover testing."""
     temp_dir = tempfile.mkdtemp()

@@ -5,6 +5,7 @@ Test package structure and imports for Kuzuk.
 import pytest
 
 
+@pytest.mark.unit
 def test_package_imports():
     """Test that main package imports work correctly."""
     try:
@@ -17,6 +18,7 @@ def test_package_imports():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_replication_imports():
     """Test replication module imports."""
     try:
@@ -27,6 +29,7 @@ def test_replication_imports():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_function_shipping_imports():
     """Test function shipping module imports."""
     try:
@@ -41,6 +44,7 @@ def test_function_shipping_imports():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_routing_imports():
     """Test routing module imports."""
     try:
@@ -51,6 +55,7 @@ def test_routing_imports():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_monitoring_imports():
     """Test monitoring module imports."""
     try:
@@ -61,6 +66,7 @@ def test_monitoring_imports():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_factory_functions():
     """Test factory function imports."""
     try:
@@ -71,6 +77,7 @@ def test_factory_functions():
         pytest.skip(f"Skipping due to missing dependencies: {e}")
 
 
+@pytest.mark.unit
 def test_module_structure():
     """Test that all expected modules exist."""
     expected_modules = [
