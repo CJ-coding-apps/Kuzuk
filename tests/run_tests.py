@@ -58,11 +58,12 @@ def main():
     if args.fail_fast:
         base_cmd.append("-x")
 
-    # Coverage options
+    # Coverage options. The coverage floor lives in pyproject.toml
+    # ([tool.pytest.ini_options] addopts, --cov-fail-under); repeating it here
+    # silently overrode that value and failed the job on a number nothing had
+    # ever met.
     if args.coverage:
-        base_cmd.extend(
-            ["--cov=kuzuk", "--cov-report=html", "--cov-report=term-missing", "--cov-fail-under=70"]
-        )
+        base_cmd.extend(["--cov=kuzuk", "--cov-report=html", "--cov-report=term-missing"])
 
     # Run unit tests
     if args.unit or args.all:

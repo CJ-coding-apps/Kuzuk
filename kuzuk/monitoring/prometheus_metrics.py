@@ -394,7 +394,12 @@ class PrometheusMetrics:
         if not PROMETHEUS_AVAILABLE:
             return "# Prometheus client not available\n"
 
-        return generate_latest(self.registry).decode("utf-8")
+        # The guard above guarantees the client imported, so CollectorRegistry
+        # is defined; the fallback covers a caller that passed a falsy registry.
+        registry = self.registry
+        if registry is None:
+            registry = CollectorRegistry()
+        return generate_latest(registry).decode("utf-8")
 
     def get_metric_names(self) -> List[str]:
         """Get list of all metric names."""

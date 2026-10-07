@@ -1,7 +1,7 @@
 # Kuzuk Docker Environment
 # Provides a complete testing environment with KuzuDB and all dependencies
 
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
