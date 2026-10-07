@@ -13,7 +13,6 @@ starting point and will read garbage (or nothing) from a real database.
 import asyncio
 import hashlib
 import logging
-import os
 import struct
 import time
 from dataclasses import dataclass
@@ -142,7 +141,8 @@ class WALParser:
             checksum = None
             if self.enable_checksums:
                 checksum = hashlib.md5(
-                    header_data + data_bytes if data_size > 0 else header_data
+                    header_data + data_bytes if data_size > 0 else header_data,
+                    usedforsecurity=False,
                 ).hexdigest()
 
             return WALRecord(

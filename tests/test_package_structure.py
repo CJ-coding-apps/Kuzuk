@@ -24,6 +24,9 @@ def test_replication_imports():
     try:
         from kuzuk.replication import KuzuReplicationManager, ReplicaInfo, ReplicationStatus
 
+        assert KuzuReplicationManager is not None
+        assert ReplicaInfo is not None
+        assert ReplicationStatus is not None
         print("✅ Replication module import successful")
     except ImportError as e:
         pytest.skip(f"Skipping due to missing dependencies: {e}")
@@ -39,6 +42,9 @@ def test_function_shipping_imports():
             QueryExecutionMode,
         )
 
+        assert AnalyticalQuery is not None
+        assert FunctionShippingOrchestrator is not None
+        assert QueryExecutionMode is not None
         print("✅ Function shipping module import successful")
     except ImportError as e:
         pytest.skip(f"Skipping due to missing dependencies: {e}")
@@ -50,6 +56,9 @@ def test_routing_imports():
     try:
         from kuzuk.routing import ConsistencyLevel, QueryRouter, QueryType
 
+        assert ConsistencyLevel is not None
+        assert QueryRouter is not None
+        assert QueryType is not None
         print("✅ Routing module import successful")
     except ImportError as e:
         pytest.skip(f"Skipping due to missing dependencies: {e}")
@@ -61,6 +70,9 @@ def test_monitoring_imports():
     try:
         from kuzuk.monitoring import HealthMetrics, HealthMonitor, NodeHealth
 
+        assert HealthMetrics is not None
+        assert HealthMonitor is not None
+        assert NodeHealth is not None
         print("✅ Monitoring module import successful")
     except ImportError as e:
         pytest.skip(f"Skipping due to missing dependencies: {e}")
@@ -72,6 +84,8 @@ def test_factory_functions():
     try:
         from kuzuk import create_enterprise_kuzuk_driver, create_simple_kuzuk_driver
 
+        assert create_enterprise_kuzuk_driver is not None
+        assert create_simple_kuzuk_driver is not None
         print("✅ Factory functions import successful")
     except ImportError as e:
         pytest.skip(f"Skipping due to missing dependencies: {e}")

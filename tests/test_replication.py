@@ -2,14 +2,13 @@
 Unit tests for replication components.
 """
 
-import asyncio
 import shutil
 import struct
 import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -288,11 +287,11 @@ class TestKuzuReplicationManager:
         """Create replication manager."""
         with patch("kuzuk.replication.manager.KuzuDriver") as mock_driver_class:
             mock_driver_class.return_value = mock_master_driver
-            replica_paths = [f"{temp_replica_dir}/replica_1.kuzu", f"{temp_replica_dir}/replica_2.kuzu"]
-            return KuzuReplicationManager(
-                master_path=temp_master_path, 
-                replica_paths=replica_paths
-            )
+            replica_paths = [
+                f"{temp_replica_dir}/replica_1.kuzu",
+                f"{temp_replica_dir}/replica_2.kuzu",
+            ]
+            return KuzuReplicationManager(master_path=temp_master_path, replica_paths=replica_paths)
 
     @pytest.mark.unit
     def test_manager_initialization(self, replication_manager, temp_master_path):
@@ -309,8 +308,6 @@ class TestKuzuReplicationManager:
 
         assert replication_manager.running is False
         assert replication_manager.master_driver is not None
-
-
 
     @pytest.mark.unit
     def test_get_replication_stats(self, replication_manager):

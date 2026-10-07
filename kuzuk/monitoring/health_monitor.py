@@ -102,7 +102,7 @@ class HealthChecker:
         Returns:
             HealthMetrics with current health status
         """
-        start_time = time.time()
+        time.time()
 
         try:
             # Basic connectivity and response time
@@ -236,8 +236,9 @@ class HealthChecker:
                     result = await driver.execute_query(query)
                     if result.get("success"):
                         successful_queries += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Best-effort probe: a failed probe simply counts as unsuccessful.
+                    logger.debug(f"Health-check query failed: {e}")
 
             return successful_queries / len(test_queries) if test_queries else 0.0
 

@@ -2,20 +2,15 @@
 Security testing and penetration tests for Kuzuk.
 """
 
-import asyncio
 import hashlib
-import secrets
 import shutil
-import socket
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
 
-from kuzuk import KuzukDriver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
 from kuzuk.function_shipping.transport import NetworkTransportManager
 
@@ -155,8 +150,7 @@ async def secure_test_database():
         ]
 
         for user_id, username, email, password_hash, role in test_users:
-            await driver.execute_query(
-                f"""
+            await driver.execute_query(f"""
                 CREATE (u:User {{
                     id: {user_id},
                     username: '{username}',
@@ -165,8 +159,7 @@ async def secure_test_database():
                     role: '{role}',
                     created_at: '2023-01-01'
                 }})
-            """
-            )
+            """)
 
         yield str(db_path)
 
@@ -208,7 +201,7 @@ class TestSQLInjectionProtection:
                                 successful_injections += 1
                                 print(f"⚠️  Injection succeeded: {malicious_query}")
 
-                except Exception as e:
+                except Exception:
                     # Exceptions are expected for malicious queries
                     pass
 
@@ -342,7 +335,7 @@ class TestNetworkSecurity:
             # Try to overwhelm with requests
             for i in range(100):
                 try:
-                    result = await driver.execute_query("MATCH (u:User) RETURN count(u)")
+                    await driver.execute_query("MATCH (u:User) RETURN count(u)")
                     request_count += 1
                 except Exception:
                     failed_requests += 1

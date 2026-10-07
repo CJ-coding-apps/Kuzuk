@@ -28,6 +28,7 @@ it as the source of truth, not the module names.
 | Automatic failover / replica promotion | **Not implemented.** There is no master election despite what the class names suggest. |
 | Function shipping (`kuzuk.function_shipping`) | Implemented over an HTTP transport, but exercised **only** against in-process mocks — never against real Kùzu nodes. Treat as unproven. |
 | Kubernetes operator (`k8s/operator`) | Manifests plus a controller script. Not tested against a live cluster. |
+| Type checking (`mypy`) | **Not strictly typed.** mypy runs over every function body (`check_untyped_defs`) but with no `disallow_*` gates and no `warn_return_any`, so annotations are best-effort rather than enforced. |
 
 If you need scalable, consistent KùzuDB today, this prototype is not it.
 

@@ -6,7 +6,6 @@ These tests require KuzuDB to be installed and available.
 import asyncio
 import shutil
 import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -36,54 +35,40 @@ async def sample_database(temp_db_dir):
         await driver.initialize()
 
         # Create test schema
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE NODE TABLE Person(id INT64, name STRING, age INT64, PRIMARY KEY(id))
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE NODE TABLE Movie(id INT64, title STRING, year INT64, PRIMARY KEY(id))
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE REL TABLE Knows(FROM Person TO Person, since INT64)
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE REL TABLE Acted(FROM Person TO Movie, role STRING)
-        """
-        )
+        """)
 
         # Insert test data
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE (p1:Person {id: 1, name: 'Alice', age: 30}),
                    (p2:Person {id: 2, name: 'Bob', age: 25}),
                    (p3:Person {id: 3, name: 'Carol', age: 35}),
                    (m1:Movie {id: 1, title: 'The Matrix', year: 1999}),
                    (m2:Movie {id: 2, title: 'Inception', year: 2010})
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             MATCH (p1:Person {id: 1}), (p2:Person {id: 2})
             CREATE (p1)-[:Knows {since: 2020}]->(p2)
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             MATCH (p1:Person {id: 1}), (m1:Movie {id: 1})
             CREATE (p1)-[:Acted {role: 'Neo'}]->(m1)
-        """
-        )
+        """)
 
         yield str(db_path)
 
@@ -120,7 +105,9 @@ class TestKuzuDriverIntegration:
             assert len(result["rows"]) > 0
 
             # Test prepared statements
-            stmt = await driver.prepare_statement("MATCH (p:Person) WHERE p.age > $age RETURN p.name")
+            stmt = await driver.prepare_statement(
+                "MATCH (p:Person) WHERE p.age > $age RETURN p.name"
+            )
             result = await driver.execute_prepared(stmt, {"age": 25})
             assert result["success"] is True
 
@@ -190,10 +177,8 @@ class TestReplicationIntegration:
 
         # Create replica paths
         replica_paths = [str(replica_dir / f"replica_{i}.kuzu") for i in range(1, 3)]
-        
-        manager = KuzuReplicationManager(
-            master_path=sample_database, replica_paths=replica_paths
-        )
+
+        manager = KuzuReplicationManager(master_path=sample_database, replica_paths=replica_paths)
 
         try:
             await manager.initialize()
@@ -259,9 +244,9 @@ class TestScalableDriverIntegration:
         replica_dir = Path(temp_db_dir) / "replicas"
         replica_dir.mkdir(exist_ok=True)
 
-        # Create replica paths  
-        replica_paths = [str(replica_dir / f"replica_{i}.kuzu") for i in range(1, 3)]
-        
+        # Create replica paths
+        [str(replica_dir / f"replica_{i}.kuzu") for i in range(1, 3)]
+
         driver = KuzukDriver(
             master_db_path=sample_database,
             replica_count=2,

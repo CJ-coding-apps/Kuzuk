@@ -4,9 +4,7 @@ Provides comprehensive metrics collection for monitoring and alerting.
 """
 
 import logging
-import time
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -45,8 +43,8 @@ class MetricDefinition:
     name: str
     description: str
     metric_type: MetricType
-    labels: List[str] = None
-    buckets: List[float] = None  # For histograms
+    labels: Optional[List[str]] = None
+    buckets: Optional[List[float]] = None  # For histograms
 
 
 class PrometheusMetrics:

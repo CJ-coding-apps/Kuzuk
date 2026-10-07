@@ -2,14 +2,11 @@
 Unit tests for Function Shipping components.
 """
 
-import asyncio
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from kuzuk.function_shipping.orchestrator import (
-    AggregatedResult,
     AnalyticalQuery,
     FunctionShippingOrchestrator,
     QueryExecutionMode,
@@ -22,7 +19,6 @@ from kuzuk.function_shipping.orchestrator import (
 )
 from kuzuk.function_shipping.transport import (
     NetworkTransportManager,
-    NodeEndpoint,
     TransportProtocol,
     create_http_endpoint,
     create_tcp_endpoint,

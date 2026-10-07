@@ -9,7 +9,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +83,8 @@ class KuzuDriver:
         # lock for both deadlocked: initialize() held it across an await, so a
         # second caller blocked the event loop while the first could never resume
         # to release it.
-        self.database = None
-        self.connection = None
+        self.database: Any = None
+        self.connection: Any = None
         self._lock = threading.Lock()
         self._init_lock = asyncio.Lock()
         self._initialized = False
@@ -112,36 +112,20 @@ class KuzuDriver:
     def _open_database(self):
         """Open the Kùzu database, applying the configured options.
 
-        The bindings changed shape across releases: current versions (kuzu
-        0.11.x, verified) take these as keyword arguments and spell compression
-        ``compression``; older ones exposed a ``SystemConfig`` object. The
-        options used to be applied only on a fallback branch that could never
-        run, so ``read_only`` and the resource limits were silently ignored and
-        every database was opened read-write.
+        kuzu 0.11.3 (the pinned version, verified) takes these as keyword
+        arguments and spells compression ``compression``. The options used to be
+        applied only on a dead fallback branch, so ``read_only`` and the
+        resource limits were silently ignored and every database was opened
+        read-write. A ``SystemConfig`` fallback for older bindings was removed:
+        it is not present in 0.11.3 and could never have run.
         """
-        options = {
+        options: Dict[str, Any] = {
             "buffer_pool_size": self.buffer_pool_size,
             "max_num_threads": self.max_num_threads,
             "read_only": self.read_only,
+            "compression": self.enable_compression,
         }
-
-        try:
-            return kuzu.Database(
-                str(self.database_path),
-                compression=self.enable_compression,
-                **options,
-            )
-        except TypeError:
-            # Older bindings: use a SystemConfig object when one is exposed,
-            # otherwise fall back to a plain open.
-            if hasattr(kuzu, "SystemConfig"):
-                config = kuzu.SystemConfig()
-                config.buffer_pool_size = self.buffer_pool_size
-                config.max_num_threads = self.max_num_threads
-                config.enable_compression = self.enable_compression
-                config.read_only = self.read_only
-                return kuzu.Database(str(self.database_path), config)
-            return kuzu.Database(str(self.database_path))
+        return kuzu.Database(str(self.database_path), **options)
 
     async def _initialize_database(self) -> None:
         """Initialize database and connection in a thread-safe manner."""
@@ -277,9 +261,9 @@ class KuzuDriver:
                     if isinstance(row, dict):
                         rows.append(row)
                         continue
-                    row_data = {}
+                    row_data: Dict[str, Any] = {}
                     for i, col_name in enumerate(columns):
-                        value = row[i] if i < len(row) else None
+                        value: Any = row[i] if i < len(row) else None
                         # Handle KuzuDB value wrapper types
                         if hasattr(value, "get_value"):
                             value = value.get_value()
@@ -381,7 +365,7 @@ class KuzuDriver:
             Health status information including database metrics
         """
         start_time = time.time()
-        health_info = {
+        health_info: Dict[str, Any] = {
             "healthy": False,
             "database_path": str(self.database_path),
             "read_only": self.read_only,
@@ -434,7 +418,8 @@ class KuzuDriver:
                     try:
                         # Try to create and drop a temporary table
                         await self.execute_query(
-                            "CREATE NODE TABLE IF NOT EXISTS __health_test__(id INT64, PRIMARY KEY(id))"
+                            "CREATE NODE TABLE IF NOT EXISTS __health_test__"
+                            "(id INT64, PRIMARY KEY(id))"
                         )
                         await self.execute_query("DROP TABLE __health_test__")
                         health_info["checks"]["write_test"] = True
@@ -483,7 +468,7 @@ class KuzuDriver:
             Schema information including tables, relationships, and properties
         """
         try:
-            schema_info = {
+            schema_info: Dict[str, Any] = {
                 "database_path": str(self.database_path),
                 "node_tables": [],
                 "rel_tables": [],
@@ -493,7 +478,9 @@ class KuzuDriver:
 
             # Query for table schema information
             try:
-                tables_result = await self.execute_query("CALL show_tables() RETURN name, type, comment")
+                tables_result = await self.execute_query(
+                    "CALL show_tables() RETURN name, type, comment"
+                )
             except Exception:
                 # Fallback for older KuzuDB versions or if show_tables() is not available
                 logger.warning("show_tables() not available, returning basic schema info")
@@ -515,7 +502,7 @@ class KuzuDriver:
                         table_name = table[0] if len(table) > 0 else ""
                         table_type = table[1] if len(table) > 1 else ""
                         table_comment = table[2] if len(table) > 2 else ""
-                    
+
                     table_info = {
                         "name": table_name,
                         "type": table_type,
@@ -526,7 +513,8 @@ class KuzuDriver:
                     # Get table properties/schema
                     try:
                         props_result = await self.execute_query(
-                            f"CALL table_info('{table_info['name']}') RETURN property_name, property_type"
+                            f"CALL table_info('{table_info['name']}') "
+                            "RETURN property_name, property_type"
                         )
                         if props_result.get("success"):
                             table_info["properties"] = props_result.get("rows", [])
@@ -549,8 +537,9 @@ class KuzuDriver:
                 )
                 if stats_result.get("success"):
                     schema_info["attached_databases"] = stats_result.get("rows", [])
-            except Exception:
-                pass
+            except Exception as e:
+                # Best-effort: not all Kuzu builds expose show_attached_databases.
+                logger.debug(f"show_attached_databases unavailable: {e}")
 
             return schema_info
 

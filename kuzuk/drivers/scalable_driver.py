@@ -3,10 +3,9 @@ Kuzuk Driver - High-level interface integrating all scaling components.
 Provides a drop-in replacement for KuzuDriver with built-in scaling capabilities.
 """
 
-import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Import only what we need at runtime, using dependency injection pattern
 
@@ -140,11 +139,17 @@ class KuzukDriver:
             raise RuntimeError("Replication manager must be initialized first")
 
         # Dynamic import to avoid circular dependency
-        from ..routing.router import create_enterprise_router
+        from ..routing.router import create_enterprise_router, create_simple_router
 
-        self.query_router = create_enterprise_router(
-            replication_manager=self.replication_manager, function_shipping=self.function_shipping
-        )
+        function_shipping = self.function_shipping
+        if function_shipping is not None:
+            self.query_router = create_enterprise_router(
+                replication_manager=self.replication_manager, function_shipping=function_shipping
+            )
+        else:
+            # Function shipping disabled (e.g. the "simple" tier): routing still
+            # works, it simply has no analytical path.
+            self.query_router = create_simple_router(self.replication_manager)
         logger.info("Query router initialized")
 
     async def _setup_health_monitoring(self) -> None:
@@ -215,14 +220,17 @@ class KuzukDriver:
             raise RuntimeError("Query router not available")
 
         # Use provided context or create default
-        if context is None:
+        route_context: Any = context
+        if route_context is None:
             # Dynamic import for QueryContext
             from ..routing.router import ConsistencyLevel, QueryContext
 
-            context = QueryContext(consistency_level=ConsistencyLevel(self.default_consistency))
+            route_context = QueryContext(
+                consistency_level=ConsistencyLevel(self.default_consistency)
+            )
 
         # Route and execute query
-        result = await self.query_router.execute_query(query, context)
+        result = await self.query_router.execute_query(query, route_context)
         return result
 
     async def execute_analytical_query(
@@ -253,13 +261,13 @@ class KuzukDriver:
 
         # Create analytical query
         # Dynamic import for AnalyticalQuery
-        from ..function_shipping.orchestrator import AnalyticalQuery
+        from ..function_shipping.orchestrator import AnalyticalQuery, QueryExecutionMode
 
         analytical_query = AnalyticalQuery(
             query_id=f"analytical_{hash(query)}",
             cypher_query=query,
             parameters={},
-            execution_mode=execution_mode,
+            execution_mode=QueryExecutionMode(execution_mode),
             timeout_seconds=timeout_seconds,
             aggregation_function=aggregation_function,
         )

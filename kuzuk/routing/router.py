@@ -8,12 +8,15 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..drivers.kuzu_wrapper import KuzuDriver
-from ..function_shipping.orchestrator import AnalyticalQuery, FunctionShippingOrchestrator
+from ..function_shipping.orchestrator import (
+    AnalyticalQuery,
+    FunctionShippingOrchestrator,
+    QueryExecutionMode,
+)
 from ..replication.manager import KuzuReplicationManager, ReplicaInfo
 
 logger = logging.getLogger(__name__)
@@ -309,7 +312,7 @@ class QueryRouter:
         Returns:
             Routing decision with target node and metadata
         """
-        start_time = time.time()
+        time.time()
         context = context or QueryContext()
 
         try:
@@ -492,7 +495,7 @@ class QueryRouter:
             logger.error(f"Replica {replica_id} query execution failed: {e}")
             raise
 
-    async def _execute_analytical(self, query: str, context: QueryContext) -> Any:
+    async def _execute_analytical(self, query: str, context: Optional[QueryContext] = None) -> Any:
         """Execute analytical query using function shipping."""
         if not self.function_shipping:
             # Fallback to master
@@ -503,7 +506,7 @@ class QueryRouter:
             query_id=self._generate_query_id(query),
             cypher_query=query,
             parameters={},
-            execution_mode="parallel_all",
+            execution_mode=QueryExecutionMode.PARALLEL_ALL,
             timeout_seconds=60.0,
         )
 
@@ -513,7 +516,7 @@ class QueryRouter:
 
     def _generate_query_id(self, query: str) -> str:
         """Generate unique query ID."""
-        query_hash = hashlib.md5(query.encode()).hexdigest()[:8]
+        query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()[:8]
         timestamp = int(time.time() * 1000)
         return f"query_{timestamp}_{query_hash}"
 

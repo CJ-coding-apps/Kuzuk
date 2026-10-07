@@ -5,17 +5,16 @@ Implements master-replica pattern with WAL streaming and health monitoring.
 
 import asyncio
 import logging
-import os
 import shutil
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from ..drivers.kuzu_wrapper import KuzuDriver
-from .wal_streamer import WALApplier, WALPosition, WALStreamer
+from .wal_streamer import WALStreamer
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +99,7 @@ class KuzuReplicationManager:
         self.running = False
 
         # Statistics
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "replications_performed": 0,
             "total_replication_time": 0.0,
             "last_replication": None,
