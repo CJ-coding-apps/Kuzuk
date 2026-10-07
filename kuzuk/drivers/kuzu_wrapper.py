@@ -9,7 +9,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +77,16 @@ class KuzuDriver:
         self.enable_compression = enable_compression
         self.read_only = read_only
 
-        # Connection management
-        self.database = None
-        self.connection = None
+        # Connection management. ``_lock`` guards the native connection and is
+        # only ever held by the worker thread performing the call; ``_init_lock``
+        # is the async-safe guard for one-time initialisation. Using the blocking
+        # lock for both deadlocked: initialize() held it across an await, so a
+        # second caller blocked the event loop while the first could never resume
+        # to release it.
+        self.database: Any = None
+        self.connection: Any = None
         self._lock = threading.Lock()
+        self._init_lock = asyncio.Lock()
         self._initialized = False
 
         logger.info(f"KuzuDriver initialized: {database_path}")
@@ -90,7 +96,7 @@ class KuzuDriver:
         if self._initialized:
             return
 
-        with self._lock:
+        async with self._init_lock:
             if self._initialized:
                 return
 
@@ -103,35 +109,32 @@ class KuzuDriver:
                 logger.error(f"Failed to initialize KuzuDB: {e}")
                 raise
 
+    def _open_database(self):
+        """Open the Kùzu database, applying the configured options.
+
+        kuzu 0.11.3 (the pinned version, verified) takes these as keyword
+        arguments and spells compression ``compression``. The options used to be
+        applied only on a dead fallback branch, so ``read_only`` and the
+        resource limits were silently ignored and every database was opened
+        read-write. A ``SystemConfig`` fallback for older bindings was removed:
+        it is not present in 0.11.3 and could never have run.
+        """
+        options: Dict[str, Any] = {
+            "buffer_pool_size": self.buffer_pool_size,
+            "max_num_threads": self.max_num_threads,
+            "read_only": self.read_only,
+            "compression": self.enable_compression,
+        }
+        return kuzu.Database(str(self.database_path), **options)
+
     async def _initialize_database(self) -> None:
         """Initialize database and connection in a thread-safe manner."""
 
         def _init():
             if KUZU_AVAILABLE:
-                # Create database - API has changed in newer versions
-                try:
-                    # Try new API first (KuzuDB 0.11+)
-                    self.database = kuzu.Database(str(self.database_path))
+                with self._lock:
+                    self.database = self._open_database()
                     self.connection = kuzu.Connection(self.database)
-                except Exception as e:
-                    # Fallback to older API with SystemConfig if available
-                    try:
-                        if hasattr(kuzu, "SystemConfig"):
-                            system_config = kuzu.SystemConfig()
-                            system_config.buffer_pool_size = self.buffer_pool_size
-                            system_config.max_num_threads = self.max_num_threads
-                            system_config.enable_compression = self.enable_compression
-                            system_config.read_only = self.read_only
-
-                            self.database = kuzu.Database(str(self.database_path), system_config)
-                            self.connection = kuzu.Connection(self.database)
-                        else:
-                            # Simple database creation without config
-                            self.database = kuzu.Database(str(self.database_path))
-                            self.connection = kuzu.Connection(self.database)
-                    except Exception as fallback_error:
-                        logger.error(f"Both new and old KuzuDB API failed: {e}, {fallback_error}")
-                        raise e
             else:
                 # Use mock implementation
                 self.database = MockKuzuDatabase(str(self.database_path))
@@ -160,8 +163,22 @@ class KuzuDriver:
 
             def _execute():
                 if KUZU_AVAILABLE:
-                    result = self.connection.execute(query)
-                    return self._process_result(result)
+                    # Hold the lock for the duration of the native call. Kùzu's
+                    # bindings are not safe to use concurrently with close(); a
+                    # cancelled await leaves this thread running (executor futures
+                    # cannot be cancelled once started), so without the lock a
+                    # close() on another thread tears the connection out from
+                    # under a query that is still executing, which segfaults.
+                    with self._lock:
+                        if self.connection is None:
+                            raise RuntimeError("Database connection is closed")
+                        # Bind parameters when supplied. Passing them through is
+                        # the whole point of parameterised queries: an unbound
+                        # placeholder is not "safe by construction" -- Kùzu
+                        # evaluates the predicate as though it were absent, so
+                        # `WHERE u.name = $n` silently returns every row.
+                        result = self.connection.execute(query, parameters or None)
+                        return self._process_result(result)
                 else:
                     return self.connection.execute(query)
 
@@ -169,8 +186,21 @@ class KuzuDriver:
             return await loop.run_in_executor(None, _execute)
 
         except Exception as e:
+            # Report the failure rather than raising: the documented contract of
+            # execute_query() is to return a result dict carrying a `success`
+            # flag, and callers (health checks, routing, function shipping) read
+            # that flag instead of guarding every call with try/except. A
+            # malformed query is a caller error, not a crash. The error text is
+            # preserved in the dict.
             logger.error(f"Query execution failed: {e}")
-            raise
+            return {
+                "success": False,
+                "error": str(e),
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "stats": {},
+            }
 
     async def execute_write_query(
         self, query: str, parameters: Optional[Dict[str, Any]] = None
@@ -222,19 +252,22 @@ class KuzuDriver:
 
             # Extract rows from result
             if hasattr(result, "get_next") and hasattr(result, "has_next"):
-                # KuzuDB 0.5+ result format
+                # Current bindings return each row from get_next() as a sequence
+                # of column values. The older get_value(i) accessor that this
+                # used to call no longer exists in kuzu 0.11.x -- the resulting
+                # AttributeError was swallowed, so every column came back None.
                 while result.has_next():
-                    result.get_next()
-                    row_data = {}
+                    row = result.get_next()
+                    if isinstance(row, dict):
+                        rows.append(row)
+                        continue
+                    row_data: Dict[str, Any] = {}
                     for i, col_name in enumerate(columns):
-                        try:
-                            value = result.get_value(i)
-                            # Handle KuzuDB value types
-                            if hasattr(value, "get_value"):
-                                value = value.get_value()
-                            row_data[col_name] = value
-                        except Exception:
-                            row_data[col_name] = None
+                        value: Any = row[i] if i < len(row) else None
+                        # Handle KuzuDB value wrapper types
+                        if hasattr(value, "get_value"):
+                            value = value.get_value()
+                        row_data[col_name] = value
                     rows.append(row_data)
 
             elif hasattr(result, "fetchall"):
@@ -283,7 +316,10 @@ class KuzuDriver:
 
         def _prepare():
             if KUZU_AVAILABLE:
-                return self.connection.prepare(query)
+                with self._lock:
+                    if self.connection is None:
+                        raise RuntimeError("Database connection is closed")
+                    return self.connection.prepare(query)
             else:
                 return {"query": query, "prepared": True}
 
@@ -307,12 +343,14 @@ class KuzuDriver:
 
         def _execute():
             if KUZU_AVAILABLE:
-                if parameters:
-                    # Convert parameters to KuzuDB format if needed
-                    result = self.connection.execute(prepared_statement, parameters)
-                else:
-                    result = self.connection.execute(prepared_statement)
-                return self._process_result(result)
+                with self._lock:
+                    if self.connection is None:
+                        raise RuntimeError("Database connection is closed")
+                    if parameters:
+                        result = self.connection.execute(prepared_statement, parameters)
+                    else:
+                        result = self.connection.execute(prepared_statement)
+                    return self._process_result(result)
             else:
                 return {"success": True, "rows": [], "columns": []}
 
@@ -327,7 +365,7 @@ class KuzuDriver:
             Health status information including database metrics
         """
         start_time = time.time()
-        health_info = {
+        health_info: Dict[str, Any] = {
             "healthy": False,
             "database_path": str(self.database_path),
             "read_only": self.read_only,
@@ -380,7 +418,8 @@ class KuzuDriver:
                     try:
                         # Try to create and drop a temporary table
                         await self.execute_query(
-                            "CREATE NODE TABLE IF NOT EXISTS __health_test__(id INT64, PRIMARY KEY(id))"
+                            "CREATE NODE TABLE IF NOT EXISTS __health_test__"
+                            "(id INT64, PRIMARY KEY(id))"
                         )
                         await self.execute_query("DROP TABLE __health_test__")
                         health_info["checks"]["write_test"] = True
@@ -429,7 +468,7 @@ class KuzuDriver:
             Schema information including tables, relationships, and properties
         """
         try:
-            schema_info = {
+            schema_info: Dict[str, Any] = {
                 "database_path": str(self.database_path),
                 "node_tables": [],
                 "rel_tables": [],
@@ -439,7 +478,9 @@ class KuzuDriver:
 
             # Query for table schema information
             try:
-                tables_result = await self.execute_query("CALL show_tables() RETURN name, type, comment")
+                tables_result = await self.execute_query(
+                    "CALL show_tables() RETURN name, type, comment"
+                )
             except Exception:
                 # Fallback for older KuzuDB versions or if show_tables() is not available
                 logger.warning("show_tables() not available, returning basic schema info")
@@ -461,7 +502,7 @@ class KuzuDriver:
                         table_name = table[0] if len(table) > 0 else ""
                         table_type = table[1] if len(table) > 1 else ""
                         table_comment = table[2] if len(table) > 2 else ""
-                    
+
                     table_info = {
                         "name": table_name,
                         "type": table_type,
@@ -472,7 +513,8 @@ class KuzuDriver:
                     # Get table properties/schema
                     try:
                         props_result = await self.execute_query(
-                            f"CALL table_info('{table_info['name']}') RETURN property_name, property_type"
+                            f"CALL table_info('{table_info['name']}') "
+                            "RETURN property_name, property_type"
                         )
                         if props_result.get("success"):
                             table_info["properties"] = props_result.get("rows", [])
@@ -495,8 +537,9 @@ class KuzuDriver:
                 )
                 if stats_result.get("success"):
                     schema_info["attached_databases"] = stats_result.get("rows", [])
-            except Exception:
-                pass
+            except Exception as e:
+                # Best-effort: not all Kuzu builds expose show_attached_databases.
+                logger.debug(f"show_attached_databases unavailable: {e}")
 
             return schema_info
 
@@ -512,17 +555,20 @@ class KuzuDriver:
 
     async def close(self) -> None:
         """Close the database connection."""
-        with self._lock:
-            if self.connection:
-                if KUZU_AVAILABLE and hasattr(self.connection, "close"):
-                    self.connection.close()
-                else:
-                    # Mock connection
-                    self.connection.close()
-                self.connection = None
 
-            self.database = None
-            self._initialized = False
+        def _close():
+            # Run on a worker thread: acquiring the lock here waits for any
+            # in-flight query to finish, and doing that on the event loop thread
+            # would freeze the loop (and with it, every other coroutine).
+            with self._lock:
+                if self.connection is not None:
+                    self.connection.close()
+                    self.connection = None
+
+                self.database = None
+                self._initialized = False
+
+        await asyncio.get_event_loop().run_in_executor(None, _close)
 
         logger.info(f"KuzuDB connection closed: {self.database_path}")
 

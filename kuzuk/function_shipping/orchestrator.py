@@ -8,9 +8,8 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from ..drivers.kuzu_wrapper import KuzuDriver
 
@@ -93,7 +92,7 @@ class ResultAggregator:
     @staticmethod
     def aggregate_count_results(results: List[QueryResult]) -> AggregatedResult:
         """Aggregate COUNT query results by summing."""
-        total_count = 0
+        total_count: float = 0
         successful_results = [r for r in results if r.success]
 
         for result in successful_results:
@@ -218,7 +217,7 @@ class FunctionShippingOrchestrator:
         self.result_aggregator = ResultAggregator()
 
         # Performance tracking
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "queries_executed": 0,
             "total_execution_time": 0.0,
             "parallel_queries": 0,
@@ -263,7 +262,7 @@ class FunctionShippingOrchestrator:
             # Filter out exceptions and convert to QueryResult objects
             valid_results = []
             for i, result in enumerate(node_results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     error_result = QueryResult(
                         node_id=target_nodes[i],
                         query_id=query.query_id,

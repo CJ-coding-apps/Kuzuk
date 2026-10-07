@@ -4,9 +4,7 @@ Provides comprehensive metrics collection for monitoring and alerting.
 """
 
 import logging
-import time
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -45,8 +43,8 @@ class MetricDefinition:
     name: str
     description: str
     metric_type: MetricType
-    labels: List[str] = None
-    buckets: List[float] = None  # For histograms
+    labels: Optional[List[str]] = None
+    buckets: Optional[List[float]] = None  # For histograms
 
 
 class PrometheusMetrics:
@@ -396,7 +394,12 @@ class PrometheusMetrics:
         if not PROMETHEUS_AVAILABLE:
             return "# Prometheus client not available\n"
 
-        return generate_latest(self.registry).decode("utf-8")
+        # The guard above guarantees the client imported, so CollectorRegistry
+        # is defined; the fallback covers a caller that passed a falsy registry.
+        registry = self.registry
+        if registry is None:
+            registry = CollectorRegistry()
+        return generate_latest(registry).decode("utf-8")
 
     def get_metric_names(self) -> List[str]:
         """Get list of all metric names."""

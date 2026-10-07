@@ -26,6 +26,7 @@ def pytest_configure(config):
 # Configure asyncio event loop for tests
 pytest_plugins = ("pytest_asyncio",)
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an instance of the default event loop for the test session."""
@@ -68,23 +69,6 @@ def setup_test_id(request):
     )
 
 
-# Skip integration tests if KuzuDB is not available
-def pytest_collection_modifyitems(config, items):
-    """Modify test collection to handle missing dependencies."""
-    try:
-        import kuzu
-
-        kuzu_available = True
-    except ImportError:
-        kuzu_available = False
-
-    skip_integration = pytest.mark.skip(reason="KuzuDB not available")
-
-    for item in items:
-        if "integration" in item.keywords and not kuzu_available:
-            item.add_marker(skip_integration)
-
-
 # Pytest command line options
 def pytest_addoption(parser):
     """Add custom command line options."""
@@ -95,7 +79,26 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip tests based on command line options."""
+    """Apply skip markers.
+
+    This hook used to be defined twice; the second definition shadowed the
+    first, so the "skip integration tests when KuzuDB is missing" behaviour
+    never ran. Both behaviours now live in this single hook.
+    """
+    # Skip integration tests if KuzuDB is not available.
+    try:
+        import kuzu  # noqa: F401  (presence check; used via ImportError below)
+
+        kuzu_available = True
+    except ImportError:
+        kuzu_available = False
+
+    skip_integration = pytest.mark.skip(reason="KuzuDB not available")
+    for item in items:
+        if "integration" in item.keywords and not kuzu_available:
+            item.add_marker(skip_integration)
+
+    # Skip performance / slow tests unless explicitly requested.
     if not config.getoption("--run-performance"):
         skip_performance = pytest.mark.skip(reason="need --run-performance option to run")
         for item in items:

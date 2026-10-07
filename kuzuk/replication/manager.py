@@ -5,17 +5,16 @@ Implements master-replica pattern with WAL streaming and health monitoring.
 
 import asyncio
 import logging
-import os
 import shutil
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from ..drivers.kuzu_wrapper import KuzuDriver
-from .wal_streamer import WALApplier, WALPosition, WALStreamer
+from .wal_streamer import WALStreamer
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +99,7 @@ class KuzuReplicationManager:
         self.running = False
 
         # Statistics
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "replications_performed": 0,
             "total_replication_time": 0.0,
             "last_replication": None,
@@ -152,16 +151,47 @@ class KuzuReplicationManager:
             replica.error_count += 1
             logger.error(f"Failed to initialize replica {replica.id}: {e}")
 
+    async def _checkpoint_master(self) -> None:
+        """Fold the master's write-ahead log into its database file.
+
+        Kùzu keeps recently committed data in ``<database>.wal`` until a
+        checkpoint. Copying only the database file copies a database that is
+        missing those commits, and copying the file while it is being written
+        can copy a torn one. Checkpointing first makes the on-disk database a
+        complete, consistent snapshot to copy.
+        """
+        if not self.master_driver:
+            return
+        try:
+            await self.master_driver.execute_query("CHECKPOINT")
+        except Exception as e:
+            logger.warning(f"Master CHECKPOINT failed; replicas may lag or be inconsistent: {e}")
+
+    def _copy_database_files(self, source_path: Path, replica_path: Path) -> None:
+        """Copy a Kùzu database and its companion WAL onto a replica path."""
+        if source_path.is_file():
+            shutil.copy2(str(source_path), str(replica_path))
+
+            # The WAL lives beside the database as "<database>.wal". It must be
+            # copied with the database, and a stale one left over from a
+            # previous pass must not survive under a freshly copied database --
+            # replaying it against the new file would corrupt the replica.
+            wal_source = Path(str(source_path) + ".wal")
+            wal_dest = Path(str(replica_path) + ".wal")
+            if wal_source.exists():
+                shutil.copy2(str(wal_source), str(wal_dest))
+            elif wal_dest.exists():
+                wal_dest.unlink()
+        elif source_path.is_dir():
+            if replica_path.exists():
+                shutil.rmtree(str(replica_path))
+            shutil.copytree(str(source_path), str(replica_path))
+
     async def _create_initial_replica_copy(self, replica: ReplicaInfo) -> None:
         """Create initial replica by copying master database."""
         try:
-            if self.master_path.is_file():
-                # Copy single database file
-                shutil.copy2(str(self.master_path), replica.db_path)
-            elif self.master_path.is_dir():
-                # Copy database directory
-                shutil.copytree(str(self.master_path), replica.db_path, dirs_exist_ok=True)
-
+            await self._checkpoint_master()
+            self._copy_database_files(self.master_path, Path(replica.db_path))
             logger.info(f"Initial replica copy created: {replica.id}")
 
         except Exception as e:
@@ -190,19 +220,27 @@ class KuzuReplicationManager:
         logger.info("Replication stopped")
 
     async def _replication_loop(self) -> None:
-        """Main replication loop."""
+        """Main replication loop.
+
+        Replication is periodic and full-file: each pass checkpoints the master
+        and copies its database file to every replica. Incremental WAL replay is
+        not implemented -- Kùzu's write-ahead log is an internal format, not a
+        supported streaming interface -- so replicas converge to the master at
+        each interval rather than continuously.
+        """
         while self.running:
             try:
                 start_time = time.time()
 
-                # Check for WAL changes
-                wal_records, new_position = await self.wal_streamer.get_wal_changes()
-
-                if wal_records:
-                    # Convert WAL records to replication changes
-                    changes = [{"type": "wal_record", "record": record} for record in wal_records]
-                    # Replicate to all healthy replicas
-                    await self._replicate_changes(changes)
+                await self._checkpoint_master()
+                for replica in self.replicas.values():
+                    if replica.status == ReplicationStatus.FAILED:
+                        continue
+                    await self._replicate_to_replica(
+                        replica,
+                        [{"type": "snapshot", "source_path": str(self.master_path)}],
+                    )
+                self.stats["replications_performed"] += 1
 
                 # Update statistics
                 replication_time = time.time() - start_time
@@ -215,6 +253,8 @@ class KuzuReplicationManager:
                 # Wait for next interval
                 await asyncio.sleep(self.replication_interval)
 
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 logger.error(f"Error in replication loop: {e}")
                 self.stats["errors"] += 1
@@ -276,13 +316,7 @@ class KuzuReplicationManager:
             # Copy database files
             source_path = Path(change["source_path"])
             replica_path = Path(replica.db_path)
-
-            if source_path.is_file():
-                shutil.copy2(str(source_path), str(replica_path))
-            elif source_path.is_dir():
-                if replica_path.exists():
-                    shutil.rmtree(str(replica_path))
-                shutil.copytree(str(source_path), str(replica_path))
+            self._copy_database_files(source_path, replica_path)
 
             # Reinitialize driver
             replica.driver = KuzuDriver(replica.db_path)
@@ -293,33 +327,25 @@ class KuzuReplicationManager:
 
     async def _perform_wal_replication(self, replica: ReplicaInfo, change: Dict[str, Any]) -> None:
         """Perform WAL record replication."""
-        try:
-            wal_record = change["record"]
-
-            # For now, we'll just log the WAL record since implementing
-            # actual WAL replay requires detailed KuzuDB internal knowledge
-            logger.debug(f"Processing WAL record {wal_record.record_id} for replica {replica.id}")
-
-            # In a real implementation, this would:
-            # 1. Parse the WAL record operations
-            # 2. Apply them to the replica database
-            # 3. Update replica state accordingly
-
-            # For Phase 1, we'll consider WAL replication as successful
-            # since the core infrastructure is in place
-
-        except Exception as e:
-            logger.error(f"WAL replication failed for replica {replica.id}: {e}")
-            raise
+        # Not implemented, and deliberately not pretending otherwise: replaying
+        # Kùzu's write-ahead log requires its internal record layout, which is
+        # not a stable interface. Incremental replication is therefore not
+        # offered; the manager converges replicas by snapshot instead.
+        raise NotImplementedError(
+            "Incremental WAL replication is not implemented; use snapshot replication"
+        )
 
     async def _health_check_replicas(self) -> None:
         """Perform health checks on all replicas."""
         for replica in self.replicas.values():
             try:
                 if replica.driver:
-                    # Simple health check - try to execute a basic query
-                    # This would need to be adapted based on KuzuDriver's actual interface
-                    replica.status = ReplicationStatus.HEALTHY
+                    result = await replica.driver.execute_query("RETURN 1 AS ok")
+                    replica.status = (
+                        ReplicationStatus.HEALTHY
+                        if result.get("success")
+                        else ReplicationStatus.DISCONNECTED
+                    )
                 else:
                     replica.status = ReplicationStatus.DISCONNECTED
             except Exception as e:

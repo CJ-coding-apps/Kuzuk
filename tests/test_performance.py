@@ -3,12 +3,10 @@ Performance benchmarking for Kuzuk components.
 """
 
 import asyncio
-import os
 import shutil
 import statistics
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import psutil
@@ -18,7 +16,6 @@ import pytest_asyncio
 from kuzuk import KuzukDriver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver, KuzuDriverPool
 from kuzuk.function_shipping.orchestrator import FunctionShippingOrchestrator, create_count_query
-from kuzuk.replication.manager import KuzuReplicationManager
 
 
 class PerformanceBenchmark:
@@ -97,48 +94,40 @@ async def benchmark_database(temp_db_dir):
         await driver.initialize()
 
         # Create schema
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE NODE TABLE User(id INT64, name STRING, age INT64, city STRING, PRIMARY KEY(id))
-        """
-        )
+        """)
 
-        await driver.execute_query(
-            """
-            CREATE NODE TABLE Product(id INT64, name STRING, price DOUBLE, category STRING, PRIMARY KEY(id))
-        """
-        )
+        await driver.execute_query("""
+            CREATE NODE TABLE Product(
+                id INT64, name STRING, price DOUBLE, category STRING, PRIMARY KEY(id))
+        """)
 
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE REL TABLE Purchases(FROM User TO Product, quantity INT64, date STRING)
-        """
-        )
+        """)
 
         # Insert benchmark data
         for i in range(1000):
-            await driver.execute_query(
-                f"""
-                CREATE (u:User {{id: {i}, name: 'User{i}', age: {20 + (i % 50)}, city: 'City{i % 10}'}})
-            """
-            )
+            await driver.execute_query(f"""
+                CREATE (u:User {{
+                    id: {i}, name: 'User{i}', age: {20 + (i % 50)}, city: 'City{i % 10}'}})
+            """)
 
         for i in range(500):
-            await driver.execute_query(
-                f"""
-                CREATE (p:Product {{id: {i}, name: 'Product{i}', price: {10.0 + (i % 100)}, category: 'Category{i % 5}'}})
-            """
-            )
+            await driver.execute_query(f"""
+                CREATE (p:Product {{
+                    id: {i}, name: 'Product{i}', price: {10.0 + (i % 100)},
+                    category: 'Category{i % 5}'}})
+            """)
 
         # Create some relationships
         for i in range(0, 1000, 10):
             product_id = i % 500
-            await driver.execute_query(
-                f"""
+            await driver.execute_query(f"""
                 MATCH (u:User {{id: {i}}}), (p:Product {{id: {product_id}}})
                 CREATE (u)-[:Purchases {{quantity: {1 + (i % 5)}, date: '2023-01-01'}}]->(p)
-            """
-            )
+            """)
 
         yield str(db_path)
 

@@ -8,9 +8,9 @@ import json
 import logging
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     import aiohttp
@@ -18,11 +18,9 @@ try:
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
-    aiohttp = None
-import socket
-from urllib.parse import urlparse
+    aiohttp = None  # type: ignore[assignment]  # optional dependency
 
-from .orchestrator import AnalyticalQuery, QueryResult, QuerySerializer
+from .orchestrator import AnalyticalQuery, QueryResult
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +73,7 @@ class TransportResponse:
     success: bool
     result: Optional[QueryResult] = None
     error: Optional[str] = None
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class HTTPTransport:
@@ -121,8 +119,14 @@ class HTTPTransport:
             }
 
             # Send HTTP request
-            async with self.session.post(
-                endpoint.get_url(), json=payload, headers=headers, timeout=endpoint.timeout
+            session = self.session
+            if session is None:
+                raise RuntimeError("HTTP transport session was not initialized")
+            async with session.post(
+                endpoint.get_url(),
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=endpoint.timeout),
             ) as response:
 
                 if response.status == 200:
@@ -334,7 +338,7 @@ class NetworkTransportManager:
             self.stats["requests_sent"] += 1
             self.stats["total_response_time"] += response_time
 
-            if response.success:
+            if response.success and response.result is not None:
                 self.stats["requests_successful"] += 1
                 return response.result
             else:
@@ -396,7 +400,7 @@ class NetworkTransportManager:
         completed_tasks = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
 
         for (node_id, _), result in zip(tasks, completed_tasks):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 results[node_id] = QueryResult(
                     node_id=node_id,
                     query_id=query.query_id,
@@ -435,15 +439,15 @@ class MockKuzuNodeServer:
     def __init__(self, node_id: str, port: int = 8080):
         self.node_id = node_id
         self.port = port
-        self.app = None
-        self.runner = None
-        self.site = None
+        self.app: Any = None
+        self.runner: Any = None
+        self.site: Any = None
 
     async def handle_query(self, request):
         """Handle incoming query requests."""
         try:
             data = await request.json()
-            query_data = data.get("query", {})
+            data.get("query", {})
 
             # Simulate query execution
             await asyncio.sleep(0.1)  # Simulate processing time

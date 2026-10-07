@@ -1,0 +1,14 @@
+[flake8]
+# Align with black (line-length = 100, see [tool.black]) and ignore the two
+# pycodestyle rules black intentionally violates: E203 (whitespace before ':')
+# and W503 (line break before binary operator). Everything else is a real
+# finding.
+max-line-length = 100
+extend-ignore = E203, W503
+exclude =
+    .venv,
+    build,
+    dist,
+    .git,
+    __pycache__,
+    k8s

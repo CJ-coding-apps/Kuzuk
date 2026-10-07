@@ -181,3 +181,6 @@ Thumbs.db
 # Local development
 .local/
 .cache/
+
+# Tooling working directories
+.serena/

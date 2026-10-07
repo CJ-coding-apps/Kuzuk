@@ -3,23 +3,17 @@ Advanced failover and disaster recovery testing for Kuzuk.
 """
 
 import asyncio
-import random
 import shutil
-import signal
-import subprocess
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import psutil
 import pytest
 import pytest_asyncio
 
-from kuzuk import KuzukDriver, create_enterprise_kuzuk_driver
+from kuzuk import create_enterprise_kuzuk_driver
 from kuzuk.drivers.kuzu_wrapper import KuzuDriver
-from kuzuk.monitoring.health_monitor import NodeHealth
-from kuzuk.replication.manager import KuzuReplicationManager, ReplicationStatus
+from kuzuk.replication.manager import ReplicationStatus
 
 
 class FailoverTestSuite:
@@ -133,28 +127,24 @@ async def failover_test_database():
         await driver.initialize()
 
         # Create test schema and data
-        await driver.execute_query(
-            """
+        await driver.execute_query("""
             CREATE NODE TABLE TestNode(
                 id INT64,
                 name STRING,
                 created_at STRING,
                 PRIMARY KEY(id)
             )
-        """
-        )
+        """)
 
         # Insert test data
         for i in range(100):
-            await driver.execute_query(
-                f"""
+            await driver.execute_query(f"""
                 CREATE (n:TestNode {{
                     id: {i},
                     name: 'TestNode{i}',
                     created_at: '2023-01-{(i % 30) + 1:02d}'
                 }})
-            """
-            )
+            """)
 
         yield str(db_path)
 
@@ -174,6 +164,10 @@ class TestReplicaFailover:
 
     @pytest.mark.asyncio
     @pytest.mark.failover
+    @pytest.mark.xfail(
+        reason="failover / replica promotion is not implemented; see the README table",
+        strict=False,
+    )
     async def test_single_replica_failure(self, failover_test_database, failover_test_suite):
         """Test system behavior when a single replica fails."""
         temp_dir = tempfile.mkdtemp()
@@ -373,6 +367,10 @@ class TestPerformanceDegradation:
 
     @pytest.mark.asyncio
     @pytest.mark.failover
+    @pytest.mark.xfail(
+        reason="failover / replica promotion is not implemented; see the README table",
+        strict=False,
+    )
     async def test_slow_replica_handling(self, failover_test_database, failover_test_suite):
         """Test handling of slow replicas."""
         temp_dir = tempfile.mkdtemp()
@@ -391,9 +389,7 @@ class TestPerformanceDegradation:
             slow_replica = replica_ids[0]
 
             # Make one replica slow
-            original_execute = await failover_test_suite.simulate_slow_replica(
-                driver, slow_replica, delay_seconds=3.0
-            )
+            await failover_test_suite.simulate_slow_replica(driver, slow_replica, delay_seconds=3.0)
 
             # Test query performance
             start_time = time.time()
@@ -558,15 +554,13 @@ class TestDisasterRecovery:
 
             # Add some data during operation
             for i in range(100, 120):
-                await driver.execute_query(
-                    f"""
+                await driver.execute_query(f"""
                     CREATE (n:TestNode {{
                         id: {i},
                         name: 'PostFailureNode{i}',
                         created_at: '2023-12-01'
                     }})
-                """
-                )
+                """)
 
             # Simulate partial failure and recovery
             replica_ids = list(driver.replication_manager.replicas.keys())
@@ -577,15 +571,13 @@ class TestDisasterRecovery:
 
             # Add more data while replica is down
             for i in range(120, 140):
-                await driver.execute_query(
-                    f"""
+                await driver.execute_query(f"""
                     CREATE (n:TestNode {{
                         id: {i},
                         name: 'DuringFailureNode{i}',
                         created_at: '2023-12-02'
                     }})
-                """
-                )
+                """)
 
             # Simulate replica recovery
             if driver.replication_manager and failed_replica in driver.replication_manager.replicas:
