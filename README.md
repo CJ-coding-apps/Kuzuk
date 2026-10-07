@@ -52,15 +52,15 @@ pip install -e '.[dev]'
 
 ```python
 import asyncio
+
 from kuzuk import KuzukDriver
 
 
 async def main():
-    driver = KuzukDriver(database_path="/path/to/database", replica_count=2)
+    driver = KuzukDriver(master_db_path="/path/to/database", replica_count=2)
+    await driver.initialize()
 
-    result = await driver.execute_query(
-        "MATCH (n:Person) RETURN count(n) AS n"
-    )
+    result = await driver.execute_query("MATCH (n:Person) RETURN count(n) AS n")
     print(result["rows"])
 
     await driver.close()
