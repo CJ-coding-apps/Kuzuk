@@ -120,8 +120,8 @@ class TestKuzuDriverIntegration:
             assert len(result["rows"]) > 0
 
             # Test prepared statements
-            stmt = await driver.prepare_statement("MATCH (p:Person) WHERE p.age > $1 RETURN p.name")
-            result = await driver.execute_prepared(stmt, {"$1": 25})
+            stmt = await driver.prepare_statement("MATCH (p:Person) WHERE p.age > $age RETURN p.name")
+            result = await driver.execute_prepared(stmt, {"age": 25})
             assert result["success"] is True
 
         finally:
@@ -310,7 +310,8 @@ class TestScalableDriverIntegration:
 
             # Should have basic functionality enabled
             assert driver.replica_count == 1
-            assert driver.enable_function_shipping is True
+            # "simple" tier deliberately ships without function shipping
+            assert driver.enable_function_shipping is False
             assert driver.enable_health_monitoring is True
 
             # Test basic query

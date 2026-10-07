@@ -1,6 +1,13 @@
 """
-Write-Ahead Log (WAL) Streaming Implementation for KuzuDB Replication
-Handles parsing, streaming, and applying WAL records for real-time replication.
+Write-Ahead Log (WAL) streaming for KuzuDB replication -- NOT FUNCTIONAL.
+
+This module sketches an interface for incremental, WAL-based replication, but
+it does not parse real Kùzu WAL files. Kùzu's WAL is an internal, on-disk format
+that is not a supported or stable interface, so the record layout below is an
+invented placeholder rather than the real one. Nothing here should be relied on
+to replicate data; the supported replication path is the snapshot-based
+manager in ``manager.py``. The parsing entry points are retained only as a
+starting point and will read garbage (or nothing) from a real database.
 """
 
 import asyncio
@@ -90,8 +97,9 @@ class WALParser:
                 f.seek(start_position)
 
                 while True:
-                    # Try to read record header
-                    header_data = f.read(16)  # Assuming 16-byte header
+                    # Try to read record header. This 16-byte layout is a
+                    # placeholder, not Kùzu's actual record header.
+                    header_data = f.read(16)
                     if len(header_data) < 16:
                         break  # End of file
 
@@ -261,12 +269,15 @@ class WALStreamer:
 
     def _get_wal_path(self) -> Path:
         """Determine WAL file path based on database path."""
-        # KuzuDB typically creates .wal files
-        if self.master_db_path.is_file():
-            return self.master_db_path.with_suffix(".wal")
-        else:
-            # If it's a directory, look for .wal file inside
-            return self.master_db_path / "db.wal"
+        # Kùzu writes the write-ahead log beside the database as
+        # "<database>.wal" -- a suffix *appended* to the full file name. Using
+        # Path.with_suffix() here rewrote "db.kuzu" to "db.wal", a file Kùzu
+        # never creates, so the streamer watched a path that did not exist and
+        # always read zero records.
+        if self.master_db_path.is_file() or self.master_db_path.suffix:
+            return Path(str(self.master_db_path) + ".wal")
+        # If it is a directory, look for a .wal file inside
+        return self.master_db_path / "db.wal"
 
     async def get_wal_changes(
         self, since_position: Optional[WALPosition] = None, timeout: float = 5.0
@@ -468,22 +479,18 @@ class WALApplier:
 
     async def _apply_table_insertion(self, record: WALRecord) -> bool:
         """Apply table insertion record."""
-        # This would need to reconstruct the actual insertion query
-        # For now, we'll log it
-        logger.debug(f"Applied table insertion: {record.data}")
-        return True
+        # NOT IMPLEMENTED. Reconstructing the insertion from a real WAL record
+        # requires Kùzu's internal format. Returning True here would report a
+        # success that never happened, so fail loudly instead.
+        raise NotImplementedError("WAL record replay is not implemented")
 
     async def _apply_node_update(self, record: WALRecord) -> bool:
         """Apply node update record."""
-        # This would need to reconstruct the actual update query
-        logger.debug(f"Applied node update: {record.data}")
-        return True
+        raise NotImplementedError("WAL record replay is not implemented")
 
     async def _apply_catalog_change(self, record: WALRecord) -> bool:
         """Apply catalog change record."""
-        # This would need to reconstruct schema changes
-        logger.debug(f"Applied catalog change: {record.data}")
-        return True
+        raise NotImplementedError("WAL record replay is not implemented")
 
     def get_apply_stats(self) -> Dict[str, Any]:
         """Get statistics about applied records."""

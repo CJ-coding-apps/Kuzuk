@@ -53,15 +53,15 @@ async def sample_ecommerce_db(temp_db_dir):
                 brand STRING,
                 PRIMARY KEY(id)
             )""",
-            """CREATE NODE TABLE Order(
+            """CREATE NODE TABLE Orders(
                 id INT64,
                 order_date STRING,
                 status STRING,
                 total_amount DOUBLE,
                 PRIMARY KEY(id)
             )""",
-            """CREATE REL TABLE PlacedOrder(FROM Customer TO Order, order_type STRING)""",
-            """CREATE REL TABLE OrderContains(FROM Order TO Product, quantity INT64, unit_price DOUBLE)""",
+            """CREATE REL TABLE PlacedOrder(FROM Customer TO Orders, order_type STRING)""",
+            """CREATE REL TABLE OrderContains(FROM Orders TO Product, quantity INT64, unit_price DOUBLE)""",
             """CREATE REL TABLE CustomerViewed(FROM Customer TO Product, view_date STRING, duration_seconds INT64)""",
         ]
 
@@ -114,7 +114,7 @@ async def sample_ecommerce_db(temp_db_dir):
 
             await driver.execute_query(
                 f"""
-                CREATE (o:Order {{
+                CREATE (o:Orders {{
                     id: {i},
                     order_date: '2023-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}',
                     status: '{status}',
@@ -129,12 +129,12 @@ async def sample_ecommerce_db(temp_db_dir):
             customer_id = (i % 100) + 1
             await driver.execute_query(
                 f"""
-                MATCH (c:Customer {{id: {customer_id}}}), (o:Order {{id: {i}}})
+                MATCH (c:Customer {{id: {customer_id}}}), (o:Orders {{id: {i}}})
                 CREATE (c)-[:PlacedOrder {{order_type: 'online'}}]->(o)
             """
             )
 
-        # Order contains products
+        # Orders contains products
         for order_id in range(1, 51):
             for j in range(1, 4):  # 1-3 products per order
                 product_id = ((order_id - 1) * 3 + j - 1) % 200 + 1
@@ -143,7 +143,7 @@ async def sample_ecommerce_db(temp_db_dir):
 
                 await driver.execute_query(
                     f"""
-                    MATCH (o:Order {{id: {order_id}}}), (p:Product {{id: {product_id}}})
+                    MATCH (o:Orders {{id: {order_id}}}), (p:Product {{id: {product_id}}})
                     CREATE (o)-[:OrderContains {{quantity: {quantity}, unit_price: {unit_price}}}]->(p)
                 """
                 )
@@ -193,10 +193,10 @@ class TestEndToEndScenarios:
             queries = [
                 ("customer_count", "MATCH (c:Customer) RETURN count(c) as total_customers"),
                 ("product_count", "MATCH (p:Product) RETURN count(p) as total_products"),
-                ("order_count", "MATCH (o:Order) RETURN count(o) as total_orders"),
+                ("order_count", "MATCH (o:Orders) RETURN count(o) as total_orders"),
                 (
                     "avg_order_value",
-                    "MATCH (o:Order) RETURN avg(o.total_amount) as avg_order_value",
+                    "MATCH (o:Orders) RETURN avg(o.total_amount) as avg_order_value",
                 ),
                 (
                     "top_categories",
@@ -243,7 +243,7 @@ class TestEndToEndScenarios:
             complex_queries = [
                 # Customer segmentation
                 """
-                MATCH (c:Customer)-[:PlacedOrder]->(o:Order)
+                MATCH (c:Customer)-[:PlacedOrder]->(o:Orders)
                 WITH c, count(o) as order_count, sum(o.total_amount) as total_spent
                 RETURN 
                     CASE 
@@ -255,7 +255,7 @@ class TestEndToEndScenarios:
                 """,
                 # Product performance
                 """
-                MATCH (o:Order)-[oc:OrderContains]->(p:Product)
+                MATCH (o:Orders)-[oc:OrderContains]->(p:Product)
                 WITH p, sum(oc.quantity) as total_sold, sum(oc.quantity * oc.unit_price) as revenue
                 RETURN p.category, count(p) as products, sum(total_sold) as total_quantity, sum(revenue) as total_revenue
                 ORDER BY total_revenue DESC
@@ -301,8 +301,8 @@ class TestEndToEndScenarios:
                 queries = [
                     "MATCH (c:Customer) WHERE c.country = 'Country1' RETURN count(c)",
                     "MATCH (p:Product) WHERE p.category = 'Electronics' RETURN count(p)",
-                    "MATCH (o:Order) WHERE o.status = 'delivered' RETURN count(o)",
-                    "MATCH (c:Customer)-[:PlacedOrder]->(o:Order) RETURN c.city, count(o) as orders",
+                    "MATCH (o:Orders) WHERE o.status = 'delivered' RETURN count(o)",
+                    "MATCH (c:Customer)-[:PlacedOrder]->(o:Orders) RETURN c.city, count(o) as orders",
                     "MATCH (p:Product) WHERE p.price > 50 RETURN p.brand, count(p) as count",
                 ]
 

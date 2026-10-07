@@ -267,7 +267,7 @@ class TestAccessControl:
 
     @pytest.mark.asyncio
     @pytest.mark.security
-    async def test_unauthorized_access_prevention(self, secure_test_database):
+    async def test_unauthorized_access_prevention(self, secure_test_database, security_test_suite):
         """Test prevention of unauthorized data access."""
         driver = KuzuDriver(secure_test_database)
 

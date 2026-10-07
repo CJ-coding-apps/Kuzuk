@@ -5,34 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kuzuk"
 version = "0.1.0"
-description = "Kuzuk - Enterprise KuzuDB scaling framework with read replicas and function shipping"
+description = "Kuzuk - experimental KuzuDB scaling prototype (snapshot read replicas, query routing)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11,<3.14"
 license = {text = "MIT"}
 authors = [
-    {name = "Enhanced RAG Team", email = "contact@enhancedrag.com"}
+    {name = "Jim Cuttler", email = "jimcuttler@gmail.com"}
 ]
-keywords = ["kuzuk", "kuzu", "kuzudb", "graph", "database", "scaling", "replication", "function-shipping"]
+keywords = ["kuzuk", "kuzu", "kuzudb", "graph", "database", "scaling", "replication", "prototype"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Database",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kuzu>=0.5.0",
+    "kuzu==0.11.3",
     "psutil>=5.9.0",
     "aiofiles>=22.1.0",
     "python-dateutil>=2.8.0",
-    "pydantic>=1.10.0"
+    "pydantic>=1.10.0",
+    "aiohttp>=3.8.0"
 ]
 
 [project.optional-dependencies]
@@ -60,10 +60,8 @@ enterprise = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/enhanced-rag/kuzuk"
-Documentation = "https://kuzuk.readthedocs.io/"
-Repository = "https://github.com/enhanced-rag/kuzuk.git"
-"Bug Tracker" = "https://github.com/enhanced-rag/kuzuk/issues"
+Repository = "https://github.com/CJ-coding-apps/Kuzuk"
+"Bug Tracker" = "https://github.com/CJ-coding-apps/Kuzuk/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -71,7 +69,7 @@ include = ["kuzuk*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py38']
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -97,7 +95,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
