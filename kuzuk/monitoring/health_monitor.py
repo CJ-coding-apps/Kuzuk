@@ -1,5 +1,5 @@
 """
-Health Monitor for Enhanced RAG 6.2 KuzuDB Scaling
+Health Monitor for Kuzuk
 Monitors health and performance of master and replica nodes.
 """
 

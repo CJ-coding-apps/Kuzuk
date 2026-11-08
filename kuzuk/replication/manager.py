@@ -1,5 +1,5 @@
 """
-KuzuDB Replication Manager for Enhanced RAG 6.2
+KuzuDB Replication Manager for Kuzuk
 Implements master-replica pattern with WAL streaming and health monitoring.
 """
 
