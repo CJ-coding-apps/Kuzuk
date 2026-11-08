@@ -7,7 +7,7 @@ making horizontal scaling available as a standalone library for any KuzuDB appli
 """
 
 __version__ = "0.1.0"
-__author__ = "Enhanced RAG Team"
+__author__ = "James Cuttler"
 __description__ = (
     "Kuzuk - Enterprise KuzuDB scaling framework with read replicas and function shipping"
 )

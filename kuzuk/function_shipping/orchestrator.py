@@ -1,5 +1,5 @@
 """
-Function Shipping Orchestrator for Enhanced RAG 6.2
+Function Shipping Orchestrator for Kuzuk
 Enables parallel execution of analytical queries across KuzuDB replicas.
 """
 

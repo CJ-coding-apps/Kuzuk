@@ -1,5 +1,5 @@
 """
-Query Router for Enhanced RAG 6.2
+Query Router for Kuzuk
 Routes queries between master and replica nodes based on query type and consistency requirements.
 """
 

@@ -109,6 +109,8 @@ and reported success without replicating; that is gone.
 
 Prototype / Alpha. Interfaces may change. See the table above for what is real.
 
+To report a security problem, see [SECURITY.md](SECURITY.md) — privately, not in a public issue.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
